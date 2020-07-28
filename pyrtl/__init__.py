@@ -19,8 +19,10 @@ from .wire import Input, Output
 from .wire import Const
 from .wire import Register
 
-# helper functions
+# modules
+from .module import Module
 
+# helper functions
 from .helperfuncs import input_list
 from .helperfuncs import output_list
 from .helperfuncs import register_list
@@ -64,7 +66,6 @@ from .corecircuits import shift_right_arithmetic
 from .corecircuits import shift_left_logical
 from .corecircuits import shift_right_logical
 
-
 # memory blocks
 from .memory import MemBlock
 from .memory import RomBlock
@@ -101,6 +102,5 @@ from .passes import synthesize
 from .passes import nand_synth
 from .passes import and_inverter_synth
 from .passes import optimize
-
 
 from .transform import net_transform, wire_transform, replace_wire, copy_block, clone_wire
