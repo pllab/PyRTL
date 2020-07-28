@@ -174,13 +174,40 @@ def clone_wire(old_wire, name=None):
     two wires are from different blocks. Making two wires with the
     same name in the same block is not allowed
     """
+    from .module import _ModInput, _ModOutput
     if isinstance(old_wire, Const):
         return Const(old_wire.val, old_wire.bitwidth)
-    else:
+    elif not isinstance(old_wire, (_ModInput, _ModOutput)):
+        # ModInput and ModOutput need to be treated separately since they
+        # also take in a Module, which in the current context will need to
+        # be cloned appropriately first. Do it outside of this function.
         if name is None:
             return old_wire.__class__(old_wire.bitwidth, name=old_wire.name)
         return old_wire.__class__(old_wire.bitwidth, name=name)
 
+
+def clone_module(module, block=None):
+    from .module import Module, _ModInput, _ModOutput
+    import copy
+
+    # I just really want an object whose type is some
+    # class extending the Module base abstract class,
+    # without calling the initializer so the, among other
+    # things, definition() is not called.
+    m = module.__class__.__new__(module.__class__)
+    m.name = module.name
+    m.block = block
+    m.input_dict = {}
+    m.output_dict = {}
+    for name, wire in module.input_dict.items():
+        m.input_dict[name] = _ModInput(
+            bitwidth=wire.bitwidth, name=wire.name,
+            module=m, sort=wire.sort, strict=wire.strict)
+    for name, wire in module.output_dict.items():
+        m.output_dict[name] = _ModOutput(
+            bitwidth=wire.bitwidth, name=wire.name,
+            module=m, sort=wire.sort)
+    return m
 
 def copy_block(block=None, update_working_block=True):
     """
@@ -217,6 +244,11 @@ def _clone_block_and_wires(block_in):
         for wirevector in block_in.wirevector_subset():
             new_wv = clone_wire(wirevector)
             temp_wv_map[wirevector] = new_wv
+        # TODO uncomment this to allow a module with submodules to be lowered even more;
+        # however, I then need to deal with the multiple-assignment error that appears.
+        # for module in block_in.modules.values():
+        #     new_module = clone_module(module)
+        #     block_out.modules[new_module.name] = new_module
 
     return block_out, temp_wv_map
 

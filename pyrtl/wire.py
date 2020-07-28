@@ -173,8 +173,26 @@ class WireVector(object):
 
     def __ilshift__(self, other):
         """ Wire assignment operator (assign other to self). """
+        from .module import _ModInput, _ModOutput
+        if isinstance(other, _ModOutput) and other.module.in_definition:
+            raise PyrtlError(f"Invalid module. Module output {str(other)} cannot be "
+                              "used on the rhs of <<= while within a module definition.")
+        if isinstance(other, _ModInput) and not other.module.in_definition:
+            raise PyrtlError(f"Invalid module. Module input {str(other)} can only "
+                             "be used on the rhs of <<= while within a module definition.")
+
         other = self._prepare_for_assignment(other)
         self._build(other)
+        # To handle the case where this is the missing link between one module's
+        # output and another module's input, need to check well-connectedness.
+        # It only does a check if determines that `self` is connected to a module input
+        # (going forwards) and if `other` is connected to a module output (going backwards).
+        # Only make this check when there is at least one module present. It's not incorrect
+        # to call it otherwise, but it would waste considerable time traversing the netlist
+        # searching for non-existent ModInput/ModOutputs.
+        if self._block.modules:
+            from .helpfulness import error_if_not_well_connected
+            error_if_not_well_connected(other, self)
         return self
 
     def __ior__(self, other):
