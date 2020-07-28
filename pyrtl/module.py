@@ -59,7 +59,7 @@ class Module(ABC):
             return self.output_dict[wirename]
         else:
             raise PyrtlError(
-                "Cannot get non-IO wirevector from module.\n"
+                f"Cannot get non-IO wirevector {wirename} from module.\n"
                 "Make sure you spelled the wire name correctly, "
                 "that you used 'self.Input' and 'self.Output' rather than "
                 "'pyrtl.Input' and 'pyrtl.Output' to declare the IO wirevectors, "

@@ -20,15 +20,44 @@ class TestGoodModule(unittest.TestCase):
     def setUp(self):
         pyrtl.reset_working_block()
     
-    def test_well_connected(self):
+    def test_well_formed(self):
         a = TestGoodModule.A()
         self.assertFalse(a['a'].externally_connected())
         self.assertFalse(a['b'].externally_connected())
+    
+    def test_attempt_to_access_nonexistent_wire(self):
+        a = TestGoodModule.A()
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            _ = a['x']
+        self.assertEqual(str(ex.exception),
+            f"Cannot get non-IO wirevector x from module.\n"
+            "Make sure you spelled the wire name correctly, "
+            "that you used 'self.Input' and 'self.Output' rather than "
+            "'pyrtl.Input' and 'pyrtl.Output' to declare the IO wirevectors, "
+            "and that you are accessing them from the correct module."
+        )
 
 class TestBadModule(unittest.TestCase):
 
     def setUp(self):
         pyrtl.reset_working_block()
+    
+    def test_no_super_call_in_initializer(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                pass
+
+            def definition(self):
+                i = self.Input(2, 'i')
+                o = self.Output(3, 'o')
+                o <<= i + 1
+
+        m = M()
+        with self.assertRaises(AttributeError) as ex:
+            m['i'].to_pyrtl_input()
+        self.assertEqual(str(ex.exception),
+            "'M' object has no attribute 'input_dict'"
+        )
 
     def test_bad_input_assignment_in_module(self):
         class M(pyrtl.Module):
