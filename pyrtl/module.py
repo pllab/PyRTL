@@ -1,8 +1,11 @@
 
 from abc import ABC, abstractmethod
 from typing import Tuple, Set
-import pyrtl
+from .core import working_block
 from .helpfulness import annotate_module, error_if_not_well_connected
+from .pyrtlexceptions import PyrtlError
+from .wire import WireVector, Input, Output
+from .transform import replace_wire
 
 class Module(ABC):
     @abstractmethod
@@ -24,24 +27,29 @@ class Module(ABC):
 
     def outputs(self):
         return set(self.output_dict.values())
+
+    def _definition(self):
+        self.in_definition = True
+        self.definition()
+        self.in_definition = False
     
-    def check_all_io_internally_connected(self):
+    def _check_all_io_internally_connected(self):
         # Ensure that all ModInput and ModOutput wires
         # have been connected to some internal module logic
         src_dict, dest_dict = self.block.net_connections()
         for wire in self.inputs():
             if wire not in dest_dict:
-                raise pyrtl.PyrtlError(f"Invalid module. Input {str(wire)} is not connected to any internal module logic.")
+                raise PyrtlError(f"Invalid module. Input {str(wire)} is not connected to any internal module logic.")
         for wire in self.outputs():
             if wire not in src_dict:
-                raise pyrtl.PyrtlError(f"Invalid module. Output {str(wire)} is not connected to any internal module logic.")
+                raise PyrtlError(f"Invalid module. Output {str(wire)} is not connected to any internal module logic.")
 
     def __init__(self, block=None):
-        self.block = block if block else pyrtl.working_block()
+        self.block = block if block else working_block()
         self.input_dict = {}
         self.output_dict = {}
-        self.definition() # Must be done before annotating the module's inputs/outputs for helpfulness
-        self.check_all_io_internally_connected() # Must be done before annotating module, because we rely on the module being connected internally
+        self._definition() # Must be done before annotating the module's inputs/outputs for helpfulness
+        self._check_all_io_internally_connected() # Must be done before annotating module, because we rely on the module being connected internally
         annotate_module(self)
     
     def __getitem__(self, wirename):
@@ -50,7 +58,7 @@ class Module(ABC):
         elif wirename in self.output_dict:
             return self.output_dict[wirename]
         else:
-            raise pyrtl.PyrtlError(
+            raise PyrtlError(
                 "Cannot get non-IO wirevector from module.\n"
                 "Make sure you spelled the wire name correctly, "
                 "that you used 'self.Input' and 'self.Output' rather than "
@@ -72,20 +80,28 @@ class Module(ABC):
         return s
 
 
-class ModIOWire(pyrtl.WireVector):
+class ModIOWire(WireVector):
 
     def __init__(self, bitwidth: int, name: str, module: Module):
         self.module = module
         if not name:
             # Check this here because technically these are WireVectors, which accept
             # zero-length names, and we need a way to look them up later.
-            raise pyrtl.PyrtlError("Must supply a non-empty name for a module's input/output wire")
+            raise PyrtlError("Must supply a non-empty name for a module's input/output wire")
         super().__init__(bitwidth, name, module.block)
 
+    @abstractmethod
+    def externally_connected(self):
+        pass
 
 class ModInput(ModIOWire):
     
     def __ilshift__(self, other):
+        """ self(ModInput) <<= other """
+        if self.module.in_definition:
+            raise PyrtlError(f"Invalid module. Module input {str(self)} cannot "
+                              "be used on the lhs of <<= while within a module definition.")
+
         # We could have other be a ModOutput from another module,
         # or a ModInput from a surrounding module (i.e. self is the nested module).
         # The "nested" case is always going to be outer ModInput to nested ModInput,
@@ -97,18 +113,33 @@ class ModInput(ModIOWire):
         return self
     
     def to_pyrtl_input(self):
-        w = pyrtl.Input(len(self), name=self.name, block=self.module.block)
-        pyrtl.replace_wire(self, w, w, self.module.block)
+        w = Input(len(self), name=self.name, block=self.module.block)
+        replace_wire(self, w, w, self.module.block)
         self.module.block.add_wirevector(w)
+    
+    def externally_connected(self):
+        """ Check if this Input wire is connected to any external (outside of module) wires """
+        src_dict, _ = self.module.block.net_connections()
+        return self in src_dict
 
 class ModOutput(ModIOWire):
 
     def __ilshift__(self, other):
+        """ self(ModOutput) <<= other """
+        if not self.module.in_definition:
+            raise PyrtlError(f"Invalid module. Module output {str(self)} can only "
+                              "be used on the lhs of <<= while within a module definition.")
+
         # The only way to have access to a module's **unconnected** ModOuput wire is
         # when we're within a module's definition, meaning there is nothing to check yet.
         return super().__ilshift__(other)
 
     def to_pyrtl_output(self):
-        w = pyrtl.Output(len(self), name=self.name, block=self.module.block)
-        pyrtl.replace_wire(self, w, w, self.module.block)
+        w = Output(len(self), name=self.name, block=self.module.block)
+        replace_wire(self, w, w, self.module.block)
         self.module.block.add_wirevector(w)
+
+    def externally_connected(self):
+        """ Check if this Output wire is connected to any external (outside of module) wires """
+        _, dst_dict = self.module.block.net_connections()
+        return self in dst_dict

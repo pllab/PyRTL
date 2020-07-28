@@ -164,6 +164,14 @@ class WireVector(object):
 
     def __ilshift__(self, other):
         """ Wire assignment operator (assign other to self). """
+        from .module import ModInput, ModOutput
+        if isinstance(other, ModOutput) and other.module.in_definition:
+            raise PyrtlError(f"Invalid module. Module output {str(other)} cannot be "
+                              "used on the rhs of <<= while within a module definition.")
+        if isinstance(other, ModInput) and not other.module.in_definition:
+            raise PyrtlError(f"Invalid module. Module output {str(other)} can only "
+                             "be used on the rhs of <<= while within a module definition.")
+
         other = self._prepare_for_assignment(other)
         self._build(other)
         return self
