@@ -26,8 +26,12 @@ class Free(InputKind):
 
 class Needed(InputKind):
     def __init__(self, wire, awaited_by_set):
+        from .module import ModOutput
         self.wire = wire
         self.awaited_by_set = awaited_by_set
+        # Sanity check
+        for w in self.awaited_by_set:
+            assert(isinstance(w, ModOutput))
 
     def __str__(self):
         wns = ", ".join(map(str, self.awaited_by_set))
@@ -46,8 +50,12 @@ class Giving(OutputKind):
 
 class Dependent(OutputKind):
     def __init__(self, wire, requires_set):
+        from .module import ModInput
         self.wire = wire
         self.requires_set = requires_set
+        # Sanity check
+        for w in self.requires_set:
+            assert(isinstance(w, ModInput))
 
     def __str__(self):
         wns = ", ".join(map(str, self.requires_set))
@@ -90,7 +98,7 @@ def error_if_not_well_connected(to_wire, from_wire):
                         # with _that_ module's awaited_by_set, etc. until we can't
                         # go anymore (no non-stateful interceding elements) OR we hit
                         # out own from_wire again.
-                        descendants = _forward_reachability(net.dests[0], to_wire.module)
+                        descendants = _modular_forward_reachability(net.dests[0], to_wire.module)
                         descendants.add(net.dests[0])
                         if required_wire in descendants:
                             raise PyrtlError(
@@ -127,6 +135,69 @@ def get_wire_sort(wire, module):
     else:
         raise Exception("Only get wire sorts of inputs/outputs")
 
+# This function and _modular_affects_iter are used for jumping over
+# modules by, given an input, getting their affected outputs via their
+# sorts. This way we don't descend into the module logic itself
+# (theoretically saving a lot of time not having to navigate that module's
+# netlist again), instead taking advantage of the whole "awaited-by"/"requires" set
+# each module computes once on its own.
+# TODO add this to the paper formalisms.
+# TODO possibly consider merging with the normal _forward_reachability and _affects_iter
+#      functions through some combination of flags (though that might convolute those too much).
+def _modular_forward_reachability(wire, module) -> Set[WireVector]:
+    # Really, returns just ModInputs, at least that's the hope
+    from .module import ModInput
+    _, dest_dict = module.block.net_connections()
+    to_check = {wire}
+    affects_inputs = set()
+
+    while to_check:
+        w = to_check.pop()
+        affected_mod_inputs = set(w for w in _modular_affects_iter(w, dest_dict) if isinstance(w, ModInput))
+        for mod_input in affected_mod_inputs:
+            for awaiting_output_wire in mod_input.sort.awaited_by_set:
+                to_check.add(awaiting_output_wire)
+                # Reason you want to search again is because these wires may be connected to
+                # other modules via intermediate wires
+            affects_inputs.add(mod_input)
+    return affects_inputs
+
+
+def _modular_affects_iter(wire, dest_dict):
+    from .module import ModInput
+    if isinstance(wire, (ModInput, Const, Register, MemBlock, RomBlock, Input, Output)):
+        return {wire}
+
+    affects = set()
+    tocheck = set()
+
+    if wire not in dest_dict:
+        # TODO not sure if I should return it too (it's probably a ModOutput)
+        return {wire}
+
+    for net in dest_dict[wire]:
+        # Sanity checks!
+        # assert wire in net.args # I *would* do this, but PyRTL complains about using boolean comparison on wires, *sigh*
+        # assert len(net.dests) == 1 # FYI: The *one* time when len(net.dests) is not 1 is when the net logic op is '@' (write data to mem)
+        if net.dests:
+            tocheck.add(net.dests[0])
+
+    while tocheck:
+        w = tocheck.pop()
+        if w in affects:
+            continue  # already checked, possible with diamond dependency
+        if not isinstance(w, (ModInput, Input, Output, Const, Register, MemBlock, RomBlock)):
+            if w not in dest_dict:
+                print(f"Warning: {w} not in dest_dict")
+            else:
+                for net in dest_dict[w]:
+                    # assert w in net.args # I *would* do this, but PyRTL complains about using boolean comparison on wires, *sigh*
+                    # assert len(net.dests) == 1 # FYI: The *one* time when len(net.dests) is not 1 is when the net logic op is '@' (write data to mem)
+                    if net.dests:
+                        tocheck.add(net.dests[0])
+        affects.add(w)
+    return affects
+
 def _forward_reachability(wire, module) -> Set[WireVector]:
     """ Get the module outputs that wire combinationally affects """
     _, dest_dict = module.block.net_connections()
@@ -134,7 +205,8 @@ def _forward_reachability(wire, module) -> Set[WireVector]:
 
 def _affects_iter(wire, dest_dict):
     """
-        :param wire: input wire whose combinationally-reachable descendant wires we want to find
+        :param wire: input wire whose combinationally-reachable descendant wires we want to find (within a module, hence stopping
+                     when we get to ModOutput)
         :param dest_dict: the map from wire to the nets (plural) where that wire
                          is a source (i.e. it helps us find the wires that this wire affects)
                          i.e.
@@ -143,8 +215,6 @@ def _affects_iter(wire, dest_dict):
         Handles if there are combinational loops
     """
     from .module import ModOutput
-    # TODO I'm really wondering if having ModOutput here will affect the correctness
-    # of computing 'error_if_not_well_connected'? (like what if it stops early because of this...)
     if isinstance(wire, (ModOutput, Const, Register, MemBlock, RomBlock, Output)):
         return {wire}
 

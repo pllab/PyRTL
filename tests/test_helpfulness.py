@@ -35,9 +35,11 @@ class TestHelpfulness(unittest.TestCase):
         m3 = TestHelpfulness.M(name="m3")
         m2['a'] <<= m1['b']
         m3['a'] <<= m2['b']
-        m1['a'] <<= m3['b']  # TODO test from here
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            m1['a'] <<= m3['b']
+        self.assertTrue(str(ex.exception).startswith("Connection error!"))
 
-    # TODO add rest of simple cases, three or more modules, modules with state, check for expected wire sorts
+    # TODO add rest of simple cases, modules with state
     # TODO add in my larger test files
 
     def test_ill_connected(self):
