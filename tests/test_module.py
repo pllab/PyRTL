@@ -187,6 +187,74 @@ class TestBasicModule(unittest.TestCase):
         sim = pyrtl.Simulation()
         sim.step_multiple(inputs, outputs)
 
+    def test_module_io_names(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+        
+            def definition(self):
+                i = self.Input(2, 'i')
+                j = self.Input(5, 'j')
+                o = self.Output(7, 'o')
+                o <<= i + 1 * j
+        
+        m = M()
+        self.assertEqual(m['i'].name, 'i')
+        self.assertEqual(m['j'].name, 'j')
+        self.assertEqual(m['o'].name, 'o')
+
+    def test_connect_duplicate_modules_bad(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+        
+            def definition(self):
+                i = self.Input(2, 'i')
+                o = self.Output(3, 'o')
+                o <<= i + 1
+
+        m1 = M()
+        m2 = M()
+        m1['i'].to_pyrtl_input()
+        m2['i'].to_pyrtl_input()
+        m1['o'].to_pyrtl_output()
+        m2['o'].to_pyrtl_output()
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            _ = pyrtl.Simulation()
+        self.assertEqual(str(ex.exception),
+            "Duplicate wire names found for the following different signals: ['i', 'o'] "
+            "(make sure you are not using \"tmp\"or \"const_\" as a signal name because "
+            "those are reserved forinternal use)")
+
+    def _test_connect_duplicate_modules_good(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+        
+            def definition(self):
+                i = self.Input(2, 'i')
+                o = self.Output(3, 'o')
+                o <<= i + 1
+
+        m1 = M()
+        m2 = M()
+        m1['i'].to_pyrtl_input('m1_i')
+        m2['i'].to_pyrtl_input('m2_i')
+        m1['o'].to_pyrtl_output('m1_o')
+        m2['o'].to_pyrtl_output('m2_o')
+
+        sim = pyrtl.Simulation()
+        inputs = {
+            'm1_i': [1,2,3,0,1],
+            'm2_i': [0,0,1,1,2],
+        }
+        outputs = {
+            'm1_o': [2,3,4,1,2],
+            'm2_o': [1,1,2,2,3],
+        }
+        sim.step_multiple(inputs, outputs)
+
+
     def test_good_nested_connection(self):
         class A(pyrtl.Module):
             def __init__(self):

@@ -44,7 +44,8 @@ class Module(ABC):
             if wire not in src_dict:
                 raise PyrtlError(f"Invalid module. Output {str(wire)} is not connected to any internal module logic.")
 
-    def __init__(self, block=None):
+    def __init__(self, name="", block=None):
+        self.name = name
         self.block = block if block else working_block()
         self.input_dict = {}
         self.output_dict = {}
@@ -112,8 +113,9 @@ class ModInput(ModIOWire):
         super().__ilshift__(other)
         return self
     
-    def to_pyrtl_input(self):
-        w = Input(len(self), name=self.name, block=self.module.block)
+    def to_pyrtl_input(self, name=""):
+        name = name if name else self.name
+        w = Input(len(self), name=name, block=self.module.block)
         replace_wire(self, w, w, self.module.block)
         self.module.block.add_wirevector(w)
     
@@ -134,8 +136,9 @@ class ModOutput(ModIOWire):
         # when we're within a module's definition, meaning there is nothing to check yet.
         return super().__ilshift__(other)
 
-    def to_pyrtl_output(self):
-        w = Output(len(self), name=self.name, block=self.module.block)
+    def to_pyrtl_output(self, name=""):
+        name = name if name else self.name
+        w = Output(len(self), name=name, block=self.module.block)
         replace_wire(self, w, w, self.module.block)
         self.module.block.add_wirevector(w)
 
