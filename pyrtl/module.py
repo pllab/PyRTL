@@ -76,10 +76,10 @@ class Module(ABC):
         s += f"Module '{self.__class__.__name__}'\n"
         s += f"  Inputs:\n"
         for wire in self.input_dict.values():
-            s += f"    {wire.name, str(wire.sort)}\n"
+            s += f"    {wire.original_name, str(wire.sort)}\n"
         s += f"  Outputs:\n"
         for wire in self.output_dict.values():
-            s += f"    {wire.name, str(wire.sort)}\n"
+            s += f"    {wire.original_name, str(wire.sort)}\n"
         return s
 
 
