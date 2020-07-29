@@ -199,9 +199,15 @@ class TestBasicModule(unittest.TestCase):
                 o <<= i + 1 * j
         
         m = M()
-        self.assertEqual(m['i'].name, 'i')
-        self.assertEqual(m['j'].name, 'j')
-        self.assertEqual(m['o'].name, 'o')
+        # It's a little distasteful that the user-defined
+        # name is hidden behind .original_name, so that
+        # they when they write .name, it doesn't give
+        # what you would expect. It would be better if
+        # .name was opaque/only used internally, and the user
+        # only really saw the wire via __str__ calls.
+        self.assertEqual(m['i'].original_name, 'i')
+        self.assertEqual(m['j'].original_name, 'j')
+        self.assertEqual(m['o'].original_name, 'o')
 
     def test_connect_duplicate_modules_bad(self):
         class M(pyrtl.Module):
@@ -222,11 +228,11 @@ class TestBasicModule(unittest.TestCase):
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             _ = pyrtl.Simulation()
         self.assertEqual(str(ex.exception),
-            "Duplicate wire names found for the following different signals: ['i', 'o'] "
+            "Duplicate wire names found for the following different signals: ['o', 'i'] "
             "(make sure you are not using \"tmp\"or \"const_\" as a signal name because "
             "those are reserved forinternal use)")
 
-    def _test_connect_duplicate_modules_good(self):
+    def test_connect_duplicate_modules_good(self):
         class M(pyrtl.Module):
             def __init__(self):
                 super().__init__()

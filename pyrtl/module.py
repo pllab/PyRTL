@@ -89,7 +89,15 @@ class ModIOWire(WireVector):
             # Check this here because technically these are WireVectors, which accept
             # zero-length names, and we need a way to look them up later.
             raise PyrtlError("Must supply a non-empty name for a module's input/output wire")
-        super().__init__(bitwidth, name, module.block)
+        # Secretly store the given name, and pass in a blank name to the super
+        # constructor so that a fresh temporary name is produced. This allows
+        # two modules to be instantiated with same-named I/O wires without the
+        # second overwriting the first.
+        self.original_name = name
+        super().__init__(bitwidth=bitwidth, name="", block=module.block)
+
+    def __str__(self):
+        return ''.join([self.original_name, '/', str(self.bitwidth), self._code])
 
     @abstractmethod
     def externally_connected(self):
@@ -114,7 +122,7 @@ class ModInput(ModIOWire):
         return self
     
     def to_pyrtl_input(self, name=""):
-        name = name if name else self.name
+        name = name if name else self.original_name
         w = Input(len(self), name=name, block=self.module.block)
         replace_wire(self, w, w, self.module.block)
         self.module.block.add_wirevector(w)
@@ -137,7 +145,7 @@ class ModOutput(ModIOWire):
         return super().__ilshift__(other)
 
     def to_pyrtl_output(self, name=""):
-        name = name if name else self.name
+        name = name if name else self.original_name
         w = Output(len(self), name=name, block=self.module.block)
         replace_wire(self, w, w, self.module.block)
         self.module.block.add_wirevector(w)
