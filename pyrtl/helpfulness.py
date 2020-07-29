@@ -85,9 +85,12 @@ def error_if_not_well_connected(to_wire, from_wire):
                     # Actually need to follow the connections transitively,
                     # since PyRTL adds intermediate wires...
                     for net in dst_dict[awaiting_wire]:
-                        # TODO need to NOT cross-over into intra-modular boundaries;
-                        # we should just stop tracing descendants once we reach a module input/output
-                        descendants = _forward_reachability(net.dests[0], to_wire.module.block)
+                        # TODO we need to cross-over modules, but not enter them.
+                        # i.e. if our net is dest is a module input, then continue
+                        # with _that_ module's awaited_by_set, etc. until we can't
+                        # go anymore (no non-stateful interceding elements) OR we hit
+                        # out own from_wire again.
+                        descendants = _forward_reachability(net.dests[0], to_wire.module)
                         descendants.add(net.dests[0])
                         if required_wire in descendants:
                             raise PyrtlError(
@@ -97,8 +100,7 @@ def error_if_not_well_connected(to_wire, from_wire):
                 else:
                     # It's ambiguous, since we don't know for sure until the # entire circuit is connected.
                     # TODO improve this message, it's not very accurate/clear
-                    # TODO run this with 'TestDifferentSizes' unit test, not sure if this warning is correct
-                    print(f"{awaiting_wire} is still disconnected, so the circuit is still ambiguous")
+                    print(f"{awaiting_wire} of {awaiting_wire.module.name} is still disconnected, so the circuit is still ambiguous")
 
 
 def annotate_module(module):
@@ -110,14 +112,14 @@ def get_wire_sort(wire, module):
 
     if isinstance(wire, ModInput):
         # Get its forward reachability
-        forward = _forward_reachability(wire, module.block)
+        forward = _forward_reachability(wire, module)
         affects = set(w for w in forward if w in module.outputs())
         if affects:
             return Needed(wire, affects)
         return Free(wire)
     elif isinstance(wire, ModOutput):
         # Get its backward reachbility
-        backward = _backward_reachability(wire, module.block)
+        backward = _backward_reachability(wire, module)
         depends = set(w for w in backward if w in module.inputs())
         if depends:
             return Dependent(wire, depends)
@@ -125,9 +127,9 @@ def get_wire_sort(wire, module):
     else:
         raise Exception("Only get wire sorts of inputs/outputs")
 
-def _forward_reachability(wire, block) -> Set[WireVector]:
+def _forward_reachability(wire, module) -> Set[WireVector]:
     """ Get the module outputs that wire combinationally affects """
-    _, dest_dict = block.net_connections()
+    _, dest_dict = module.block.net_connections()
     return _affects_iter(wire, dest_dict)
 
 def _affects_iter(wire, dest_dict):
@@ -173,9 +175,9 @@ def _affects_iter(wire, dest_dict):
         affects.add(w)
     return affects
 
-def _backward_reachability(wire, block):
+def _backward_reachability(wire, module):
     """ Get the module inputs that wire combinationally depends on """
-    src_dict, _ = block.net_connections()
+    src_dict, _ = module.block.net_connections()
     return _depends_on_iter(wire, src_dict)
 
 def _depends_on_iter(wire, src_dict):

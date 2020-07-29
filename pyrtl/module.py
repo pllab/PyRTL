@@ -45,6 +45,8 @@ class Module(ABC):
                 raise PyrtlError(f"Invalid module. Output {str(wire)} is not connected to any internal module logic.")
 
     def __init__(self, name="", block=None):
+        # If the user supplies a name to their module's initializer and wants to set it via `self.name=`,
+        # we need them to pass it into this initializer too. Not sure how to enforce this...
         self.name = name
         self.block = block if block else working_block()
         self.input_dict = {}
