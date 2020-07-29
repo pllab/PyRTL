@@ -3,30 +3,35 @@ import pyrtl
 import unittest
 import pyrtl
 
-class TestGoodModule(unittest.TestCase):
-
-    class A(pyrtl.Module):
-        def __init__(self):
-            super().__init__()
-
-        def definition(self):
-            a = self.Input(3, 'a')
-            b = self.Input(4, 'b')
-            c = self.Output(4, 'c')
-            d = self.Output(3, 'd')
-            c <<= a + 1
-            d <<= c + b - 2
+class TestBasicModule(unittest.TestCase):
 
     def setUp(self):
         pyrtl.reset_working_block()
-    
-    def test_well_formed(self):
-        a = TestGoodModule.A()
+
+    def test_not_externally_connected(self):
+        class A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                a = self.Input(3, 'a')
+                b = self.Input(4, 'b')
+                c = self.Output(4, 'c')
+                d = self.Output(3, 'd')
+                c <<= a + 1
+                d <<= c + b - 2
+
+        a = A()
         self.assertFalse(a['a'].externally_connected())
         self.assertFalse(a['b'].externally_connected())
     
     def test_attempt_to_access_nonexistent_wire(self):
-        a = TestGoodModule.A()
+        class A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            def definition(self):
+                pass
+        a = A()
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             _ = a['x']
         self.assertEqual(str(ex.exception),
@@ -36,11 +41,6 @@ class TestGoodModule(unittest.TestCase):
             "'pyrtl.Input' and 'pyrtl.Output' to declare the IO wirevectors, "
             "and that you are accessing them from the correct module."
         )
-
-class TestBadModule(unittest.TestCase):
-
-    def setUp(self):
-        pyrtl.reset_working_block()
     
     def test_no_super_call_in_initializer(self):
         class M(pyrtl.Module):
@@ -134,8 +134,6 @@ class TestBadModule(unittest.TestCase):
             "Invalid module. Module output i/2W can only "
             "be used on the rhs of <<= while within a module definition.")
 
-        pass
-
     def test_bad_output_assignment_outside_module(self):
         class M(pyrtl.Module):
             def __init__(self):
@@ -153,32 +151,27 @@ class TestBadModule(unittest.TestCase):
             "Invalid module. Module output o/4W can only "
             "be used on the lhs of <<= while within a module definition.")
 
-class TestDifferentSizes(unittest.TestCase):
+    def test_connect_different_sizes(self):
+        class A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
 
-    class A(pyrtl.Module):
-        def __init__(self):
-            super().__init__()
+            def definition(self):
+                ain = self.Input(6, 'ain')
+                o = self.Output(6, 'o')
+                o <<= ain + 3
 
-        def definition(self):
-            ain = self.Input(6, 'ain')
-            o = self.Output(6, 'o')
-            o <<= ain + 3
+        class B(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
 
-    class B(pyrtl.Module):
-        def __init__(self):
-            super().__init__()
+            def definition(self):
+                i = self.Input(5, 'i')
+                bout = self.Output(5, 'bout')
+                bout <<= i
 
-        def definition(self):
-            i = self.Input(5, 'i')
-            bout = self.Output(5, 'bout')
-            bout <<= i
-
-    def setUp(self):
-        pyrtl.reset_working_block()
-
-    def test_connect(self):
-        a = TestDifferentSizes.A()
-        b = TestDifferentSizes.B()
+        a = A()
+        b = B()
         b['i'] <<= a['o']
 
         a["ain"].to_pyrtl_input()
@@ -194,66 +187,42 @@ class TestDifferentSizes(unittest.TestCase):
         sim = pyrtl.Simulation()
         sim.step_multiple(inputs, outputs)
 
+    def test_good_nested_connection(self):
+        class A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
 
-class TestNestedConnection(unittest.TestCase):
+            def definition(self):
+                a = self.Input(2, 'a')
+                b = self.Input(2, 'b')
+                c = self.Input(2, 'c')
+                o = self.Output(5, 'o_counter')
+                o <<= a + b * c
 
-    class A(pyrtl.Module):
-        def __init__(self):
-            super().__init__()
+        class B(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
 
-        def definition(self):
-            a = self.Input(2, 'a')
-            b = self.Input(2, 'b')
-            c = self.Input(2, 'c')
-            o = self.Output(5, 'o_counter')
-            o <<= a + b * c
+            def definition(self):
+                x = self.Input(6, 'x')
+                y = self.Output(7, 'y')
+                y <<= x + 4
 
-    class B(pyrtl.Module):
-        def __init__(self):
-            super().__init__()
+        class Nested(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
 
-        def definition(self):
-            x = self.Input(6, 'x')
-            y = self.Output(7, 'y')
-            y <<= x + 4
+            def definition(self):
+                i = self.Input(6, 'i')
+                o = self.Output(7, 'o_foo')
+                b = B()
+                # Case: outer mod input to nested mod input
+                b['x'] <<= i
+                # Case: nested mod output to outer mod output
+                o <<= b['y']
 
-    class Nested(pyrtl.Module):
-        def __init__(self):
-            super().__init__()
-
-        def definition(self):
-            i = self.Input(6, 'i')
-            o = self.Output(7, 'o_foo')
-            b = TestNestedConnection.B()
-            # Case: outer mod input to nested mod input
-            b['x'] <<= i
-            # Case: nested mod output to outer mod output
-            o <<= b['y']
-
-    def setUp(self):
-        pyrtl.reset_working_block()
-
-    def test_connection(self):
-        a = TestNestedConnection.A()
-        f = TestNestedConnection.Nested()
-        f['i'] <<= a['o_counter']
-
-        a_in, b_in, c_in = pyrtl.input_list('a_in/2 b_in/2 c_in/2')
-        a['a'] <<= a_in
-        a['b'] <<= b_in
-        a['c'] <<= c_in
-
-        out_foo = pyrtl.Output(7, 'out_foo')
-        out_foo <<= f['o_foo']
-
-        inputs = {'a_in': [1], 'b_in': [2], 'c_in': [3]}
-        outputs = {'out_foo': [11]}
-        sim = pyrtl.Simulation()
-        sim.step_multiple(inputs, outputs)
-
-    def test_connection_io_shorthand(self):
-        a = TestNestedConnection.A()
-        f = TestNestedConnection.Nested()
+        a = A()
+        f = Nested()
 
         f['i'] <<= a['o_counter']
 
