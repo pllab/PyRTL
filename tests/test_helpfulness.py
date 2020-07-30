@@ -2,7 +2,6 @@ import unittest
 import pyrtl
 
 class TestHelpfulness(unittest.TestCase):
-
     class M(pyrtl.Module):
         def __init__(self, name=""):
             super().__init__(name=name)
@@ -19,8 +18,8 @@ class TestHelpfulness(unittest.TestCase):
         m = TestHelpfulness.M()
         a_in = pyrtl.Input(4, 'a_in')
         b_out = pyrtl.Output(6, 'b_out')
-        m['a'] <<= a_in + 1 # +1 to make sure we don't rely on direct connection to Pyrtl.Input
-        b_out <<= m['b'] - 1 # +1 ditto for output
+        m['a'] <<= a_in + 1
+        b_out <<= m['b'] - 1
 
         sim = pyrtl.Simulation()
         sim.step_multiple({'a_in': [1,2,3]}, {'b_out': [7, 11, 15]})
@@ -39,15 +38,30 @@ class TestHelpfulness(unittest.TestCase):
             m1['a'] <<= m3['b']
         self.assertTrue(str(ex.exception).startswith("Connection error!"))
 
-    # TODO add rest of simple cases, modules with state
-    # TODO add in my larger test files
-
     def test_ill_connected(self):
         m = TestHelpfulness.M()
 
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m['a'] <<= m['b']
         self.assertTrue(str(ex.exception).startswith("Connection error!"))
+
+    def test_module_from_working_block(self):
+        a = pyrtl.Input(3, 'a')
+        b = pyrtl.Input(4, 'b')
+        c = pyrtl.Output(4, 'c')
+        d = pyrtl.Output(3, 'd')
+        r = pyrtl.Register(3)
+        e = a * b
+        f = e | (a & b)
+        c <<= f + 1
+        r.next <<= f + 2
+        d <<= r
+
+        m = pyrtl.module_from_block()
+        self.assertTrue(isinstance(m['a'].sort, pyrtl.helpfulness.Needed))
+        self.assertTrue(isinstance(m['b'].sort, pyrtl.helpfulness.Needed))
+        self.assertTrue(isinstance(m['c'].sort, pyrtl.helpfulness.Dependent))
+        self.assertTrue(isinstance(m['d'].sort, pyrtl.helpfulness.Giving))
 
 if __name__ == '__main__':
     unittest.main()

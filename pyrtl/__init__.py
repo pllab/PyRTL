@@ -21,6 +21,7 @@ from .wire import Register
 
 # modules
 from .module import Module
+from .module import module_from_block
 
 # helper functions
 from .helperfuncs import input_list

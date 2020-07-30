@@ -324,7 +324,7 @@ class TestModuleImport(unittest.TestCase):
         r.next <<= f + 2
         d <<= r
 
-        m = pyrtl.Module.from_block(pyrtl.working_block())
+        m = pyrtl.module_from_block()
         self.assertEqual(m['a'].original_name, 'a')
         self.assertEqual(m['b'].original_name, 'b')
         self.assertEqual(m['c'].original_name, 'c')
@@ -338,11 +338,7 @@ class TestModuleImport(unittest.TestCase):
         self.assertFalse(m['c'].externally_connected())
         self.assertFalse(m['d'].externally_connected())
 
-        m['a'].to_pyrtl_input()
-        m['b'].to_pyrtl_input()
-        m['c'].to_pyrtl_output()
-        m['d'].to_pyrtl_output()
-
+        m.to_pyrtl_io()
         sim = pyrtl.Simulation()
         inputs = {
             'a': [1, 4, 6, 2],

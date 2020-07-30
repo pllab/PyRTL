@@ -27,6 +27,16 @@ class Module(ABC):
     def outputs(self):
         return set(self.output_dict.values())
 
+    def to_pyrtl_io(self):
+        """ Sets this modules' input/output wires as the
+            current block's input/output wires (normally
+            only useful when running a simulation).
+        """
+        for w in self.inputs():
+            w.to_pyrtl_input()
+        for w in self.outputs():
+            w.to_pyrtl_output()
+
     def _definition(self):
         self.in_definition = True
         self.definition()
@@ -96,20 +106,20 @@ class Module(ABC):
         self.block.add_wirevector(new_wire)
         return new_wire
 
-    @staticmethod
-    def from_block(block: Block):
-        class FromBlock(Module):
-            def __init__(self):
-                super().__init__(block=block)
-            def definition(self):
-                pass
-        m = FromBlock()
-        io = block.wirevector_subset((Input, Output))
-        for wire in io:
-            m._to_module_io(wire)
-        m._check_all_io_internally_connected()
-        annotate_module(m)
-        return m
+def module_from_block(block: Block = None):
+    block = working_block(block)
+    class FromBlock(Module):
+        def __init__(self):
+            super().__init__(block=block)
+        def definition(self):
+            pass
+    m = FromBlock()
+    io = block.wirevector_subset((Input, Output))
+    for wire in io:
+        m._to_module_io(wire)
+    m._check_all_io_internally_connected()
+    annotate_module(m)
+    return m
 
 class ModIOWire(WireVector):
 
