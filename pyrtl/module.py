@@ -1,7 +1,6 @@
-
 from abc import ABC, abstractmethod
 from typing import Tuple, Set
-from .core import working_block
+from .core import working_block, Block
 from .helpfulness import annotate_module, error_if_not_well_connected
 from .pyrtlexceptions import PyrtlError
 from .wire import WireVector, Input, Output
@@ -81,7 +80,36 @@ class Module(ABC):
         for wire in self.output_dict.values():
             s += f"    {wire.original_name, str(wire.sort)}\n"
         return s
+    
+    def _to_module_io(self, wire):
+        if not isinstance(wire, (Input, Output)):
+            raise PyrtlError("Can only convert PyRTL Input/Output "
+                "wirevectors into module input/output")
+        if isinstance(wire, Input):
+            new_wire = ModInput(len(wire), name=wire.name, module=self)
+            self.input_dict[wire.name] = new_wire
+        elif isinstance(wire, Output):
+            new_wire = ModOutput(len(wire), name=wire.name, module=self)
+            self.output_dict[wire.name] = new_wire
 
+        replace_wire(wire, new_wire, new_wire, self.block)
+        self.block.add_wirevector(new_wire)
+        return new_wire
+
+    @staticmethod
+    def from_block(block: Block):
+        class FromBlock(Module):
+            def __init__(self):
+                super().__init__(block=block)
+            def definition(self):
+                pass
+        m = FromBlock()
+        io = block.wirevector_subset((Input, Output))
+        for wire in io:
+            m._to_module_io(wire)
+        m._check_all_io_internally_connected()
+        annotate_module(m)
+        return m
 
 class ModIOWire(WireVector):
 
@@ -102,7 +130,7 @@ class ModIOWire(WireVector):
         return ''.join([self.original_name, '/', str(self.bitwidth), self._code])
 
     @abstractmethod
-    def externally_connected(self):
+    def externally_connected(self) -> bool:
         pass
 
 class ModInput(ModIOWire):

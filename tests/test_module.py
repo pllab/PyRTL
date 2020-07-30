@@ -227,10 +227,8 @@ class TestBasicModule(unittest.TestCase):
         m2['o'].to_pyrtl_output()
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             _ = pyrtl.Simulation()
-        self.assertEqual(str(ex.exception),
-            "Duplicate wire names found for the following different signals: ['o', 'i'] "
-            "(make sure you are not using \"tmp\"or \"const_\" as a signal name because "
-            "those are reserved forinternal use)")
+        self.assertTrue(str(ex.exception).startswith(
+            "Duplicate wire names found for the following different signals"))
 
     def test_connect_duplicate_modules_good(self):
         class M(pyrtl.Module):
@@ -259,7 +257,6 @@ class TestBasicModule(unittest.TestCase):
             'm2_o': [1,1,2,2,3],
         }
         sim.step_multiple(inputs, outputs)
-
 
     def test_good_nested_connection(self):
         class A(pyrtl.Module):
@@ -308,6 +305,53 @@ class TestBasicModule(unittest.TestCase):
         inputs = {'a': [1], 'b': [2], 'c': [3]}
         outputs = {'o_foo': [11]}
         sim = pyrtl.Simulation()
+        sim.step_multiple(inputs, outputs)
+
+class TestModuleImport(unittest.TestCase):
+
+    def setUp(self):
+        pyrtl.reset_working_block()
+    
+    def test_module_from_working_block(self):
+        a = pyrtl.Input(3, 'a')
+        b = pyrtl.Input(4, 'b')
+        c = pyrtl.Output(4, 'c')
+        d = pyrtl.Output(3, 'd')
+        r = pyrtl.Register(3)
+        e = a * b
+        f = e | (a & b)
+        c <<= f + 1
+        r.next <<= f + 2
+        d <<= r
+
+        m = pyrtl.Module.from_block(pyrtl.working_block())
+        self.assertEqual(m['a'].original_name, 'a')
+        self.assertEqual(m['b'].original_name, 'b')
+        self.assertEqual(m['c'].original_name, 'c')
+        self.assertEqual(m['d'].original_name, 'd')
+        self.assertTrue(isinstance(m['a'], pyrtl.module.ModInput))
+        self.assertTrue(isinstance(m['b'], pyrtl.module.ModInput))
+        self.assertTrue(isinstance(m['c'], pyrtl.module.ModOutput))
+        self.assertTrue(isinstance(m['d'], pyrtl.module.ModOutput))
+        self.assertFalse(m['a'].externally_connected())
+        self.assertFalse(m['b'].externally_connected())
+        self.assertFalse(m['c'].externally_connected())
+        self.assertFalse(m['d'].externally_connected())
+
+        m['a'].to_pyrtl_input()
+        m['b'].to_pyrtl_input()
+        m['c'].to_pyrtl_output()
+        m['d'].to_pyrtl_output()
+
+        sim = pyrtl.Simulation()
+        inputs = {
+            'a': [1, 4, 6, 2],
+            'b': [0, 3, 2, 1],
+        }
+        outputs = {
+            'c': [1, 13, 15, 3],
+            'd': [0, 2, 6, 0],
+        }
         sim.step_multiple(inputs, outputs)
 
 if __name__ == "__main__":
