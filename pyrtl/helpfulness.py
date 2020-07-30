@@ -13,6 +13,8 @@ from .core import working_block
 from .wire import Const, WireVector, Register, Input, Output
 from .memory import MemBlock, RomBlock
 
+Verbose = False
+
 class InputKind(abc.ABC):
     pass
 
@@ -108,7 +110,8 @@ def error_if_not_well_connected(to_wire, from_wire):
                 else:
                     # It's ambiguous, since we don't know for sure until the # entire circuit is connected.
                     # TODO improve this message, it's not very accurate/clear
-                    print(f"{awaiting_wire} of {awaiting_wire.module.name} is still disconnected, so the circuit is still ambiguous")
+                    if Verbose:
+                        print(f"{awaiting_wire} of {awaiting_wire.module.name} is still disconnected, so the circuit is still ambiguous")
 
 
 def annotate_module(module):
@@ -144,6 +147,8 @@ def get_wire_sort(wire, module):
 # TODO add this to the paper formalisms.
 # TODO possibly consider merging with the normal _forward_reachability and _affects_iter
 #      functions through some combination of flags (though that might convolute those too much).
+#      Edit: especially with recent changes to detecting when to step over
+#      modules in the _forward_reachability function. TBD.
 def _modular_forward_reachability(wire, module) -> Set[WireVector]:
     # Really, returns just ModInputs, at least that's the hope
     from .module import ModInput
@@ -214,7 +219,7 @@ def _affects_iter(wire, dest_dict):
                                 assert wire in net.args
         Handles if there are combinational loops
     """
-    from .module import ModOutput
+    from .module import ModInput, ModOutput
     if isinstance(wire, (ModOutput, Const, Register, MemBlock, RomBlock, Output)):
         return {wire}
 
@@ -233,7 +238,12 @@ def _affects_iter(wire, dest_dict):
         w = tocheck.pop()
         if w in affects:
             continue  # already checked, possible with diamond dependency
-        if not isinstance(w, (ModOutput, Output, Const, Register, MemBlock, RomBlock)):
+        if isinstance(w, ModInput) and (w.module != wire.module):
+            # Jump over inner module, just get the awaited_by_set
+            for mod_output in w.sort.awaited_by_set:
+                tocheck.add(mod_output)
+        # If we've reached our own module output, stop with this path
+        elif (isinstance(w, ModOutput) and w.module != wire.module) or not isinstance(w, (ModOutput, Output, Const, Register, MemBlock, RomBlock)):
             if w not in dest_dict:
                 print(f"Warning: {w} not in dest_dict")
             else:
@@ -259,7 +269,7 @@ def _depends_on_iter(wire, src_dict):
 
         Handles if there are combinational loops
     """
-    from .module import ModInput
+    from .module import ModInput, ModOutput
     if isinstance(wire, (ModInput, Const, Register, MemBlock, RomBlock, Input)):
         return {wire}
 
@@ -275,7 +285,12 @@ def _depends_on_iter(wire, src_dict):
         w = tocheck.pop()
         if w in depends_on:
             continue  # already checked, possible with diamond dependency
-        if not isinstance(w, (ModInput, Input, Const, Register, MemBlock, RomBlock)):
+        if isinstance(w, ModOutput) and (w.module != wire.module):
+            # Jump over inner module, just get the requires_set
+            for mod_input in w.sort.requires_set:
+                tocheck.add(mod_input)
+        # If we've reached our own module input, stop with this path
+        elif (isinstance(w, ModInput) and w.module != wire.module) or not isinstance(w, (ModInput, Input, Const, Register, MemBlock, RomBlock)):
             if w not in src_dict:
                 # Occurs when there are no Input wires that a module input is tied to currently.
                 # Main reason: we don't have a module type nor a module input wire type

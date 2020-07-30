@@ -63,5 +63,39 @@ class TestHelpfulness(unittest.TestCase):
         self.assertTrue(isinstance(m['c'].sort, pyrtl.helpfulness.Dependent))
         self.assertTrue(isinstance(m['d'].sort, pyrtl.helpfulness.Giving))
 
+    def test_nested_connection(self):
+        class Inner(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                x = self.Input(6, 'x')
+                y = self.Output(7, 'y')
+                y <<= x + 4
+
+        class Outer(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = self.Input(6, 'i')
+                o = self.Output(7, 'o_foo')
+                b = Inner()
+                # Case: outer mod input to nested mod input
+                b['x'] <<= i
+                # Case: nested mod output to outer mod output
+                o <<= b['y']
+
+        i = Inner()
+        self.assertTrue(isinstance(i['x'].sort, pyrtl.helpfulness.Needed))
+        self.assertTrue(isinstance(i['y'].sort, pyrtl.helpfulness.Dependent))
+        o = Outer()
+        self.assertTrue(isinstance(o['i'].sort, pyrtl.helpfulness.Needed))
+        self.assertTrue(isinstance(o['o_foo'].sort, pyrtl.helpfulness.Dependent))
+
+    def test_nested_connection_with_state(self):
+        # TODO
+        pass
+
 if __name__ == '__main__':
     unittest.main()
