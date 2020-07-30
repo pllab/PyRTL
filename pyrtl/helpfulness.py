@@ -177,7 +177,6 @@ def _modular_affects_iter(wire, dest_dict):
     tocheck = set()
 
     if wire not in dest_dict:
-        # TODO not sure if I should return it too (it's probably a ModOutput)
         return {wire}
 
     for net in dest_dict[wire]:
@@ -193,7 +192,8 @@ def _modular_affects_iter(wire, dest_dict):
             continue  # already checked, possible with diamond dependency
         if not isinstance(w, (ModInput, Input, Output, Const, Register, MemBlock, RomBlock)):
             if w not in dest_dict:
-                print(f"Warning: {w} not in dest_dict")
+                if Verbose:
+                    print(f"Warning: {w} not in dest_dict")
             else:
                 for net in dest_dict[w]:
                     # assert w in net.args # I *would* do this, but PyRTL complains about using boolean comparison on wires, *sigh*
@@ -245,7 +245,8 @@ def _affects_iter(wire, dest_dict):
         # If we've reached our own module output, stop with this path
         elif (isinstance(w, ModOutput) and w.module != wire.module) or not isinstance(w, (ModOutput, Output, Const, Register, MemBlock, RomBlock)):
             if w not in dest_dict:
-                print(f"Warning: {w} not in dest_dict")
+                if Verbose:
+                    print(f"Warning: {w} not in dest_dict")
             else:
                 for net in dest_dict[w]:
                     # assert w in net.args # I *would* do this, but PyRTL complains about using boolean comparison on wires, *sigh*
@@ -294,7 +295,8 @@ def _depends_on_iter(wire, src_dict):
             if w not in src_dict:
                 # Occurs when there are no Input wires that a module input is tied to currently.
                 # Main reason: we don't have a module type nor a module input wire type
-                print(f"Warning: {w} not in src_dict")
+                if Verbose:
+                    print(f"Warning: {w} not in src_dict")
             else:
                 tocheck.update(set(src_dict[w].args))
         depends_on.add(w)
