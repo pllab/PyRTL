@@ -94,8 +94,68 @@ class TestHelpfulness(unittest.TestCase):
         self.assertTrue(isinstance(o['o_foo'].sort, pyrtl.helpfulness.Dependent))
 
     def test_nested_connection_with_state(self):
-        # TODO
-        pass
+        class Inner(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                x = self.Input(6, 'x')
+                r = pyrtl.Register(6)
+                r.next <<= x
+                y = self.Output(7, 'y')
+                y <<= r + 4
+
+        class Outer(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = self.Input(6, 'i')
+                o = self.Output(7, 'o_foo')
+                b = Inner()
+                b['x'] <<= i
+                o <<= b['y']
+
+        i = Inner()
+        self.assertTrue(isinstance(i['x'].sort, pyrtl.helpfulness.Free))
+        self.assertTrue(isinstance(i['y'].sort, pyrtl.helpfulness.Giving))
+        o = Outer()
+        self.assertTrue(isinstance(o['i'].sort, pyrtl.helpfulness.Free))
+        self.assertTrue(isinstance(o['o_foo'].sort, pyrtl.helpfulness.Giving))
+
+    def test_nested_connection_with_state2(self):
+        class Inner(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                w = self.Input(1, 'w')
+                x = self.Input(6, 'x')
+                r = pyrtl.Register(6)
+                r.next <<= x
+                y = self.Output(7, 'y')
+                y <<= r + 4 + w
+
+        class Outer(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = self.Input(6, 'i')
+                j = self.Input(1, 'j')
+                o = self.Output(7, 'o_foo')
+                b = Inner()
+                b['x'] <<= i
+                b['w'] <<= j
+                o <<= b['y']
+
+        i = Inner()
+        self.assertTrue(isinstance(i['x'].sort, pyrtl.helpfulness.Free))
+        self.assertTrue(isinstance(i['y'].sort, pyrtl.helpfulness.Dependent))
+        o = Outer()
+        self.assertTrue(isinstance(o['i'].sort, pyrtl.helpfulness.Free))
+        self.assertTrue(isinstance(o['j'].sort, pyrtl.helpfulness.Needed))
+        self.assertTrue(isinstance(o['o_foo'].sort, pyrtl.helpfulness.Dependent))
 
 if __name__ == '__main__':
     unittest.main()
