@@ -23,10 +23,10 @@ class TestHelpfulness(unittest.TestCase):
 
         sim = pyrtl.Simulation()
         sim.step_multiple({'a_in': [1,2,3]}, {'b_out': [7, 11, 15]})
-        self.assertTrue(m['a'].sort, pyrtl.helpfulness.Needed)
-        self.assertTrue(m['b'].sort, pyrtl.helpfulness.Dependent)
-        self.assertTrue(m['b'] in m['a'].sort.awaited_by_set)
-        self.assertTrue(m['a'] in m['b'].sort.requires_set)
+        self.assertTrue(isinstance(m['a'].sort, pyrtl.helpfulness.Needed))
+        self.assertTrue(isinstance(m['b'].sort, pyrtl.helpfulness.Dependent))
+        self.assertEqual(m['a'].sort.awaited_by_set, {m['b']})
+        self.assertEqual(m['b'].sort.requires_set, {m['a']})
     
     def test_three_connected_simple_cycle_no_state(self):
         m1 = TestHelpfulness.M(name="m1")
@@ -59,9 +59,13 @@ class TestHelpfulness(unittest.TestCase):
 
         m = pyrtl.module_from_block()
         self.assertTrue(isinstance(m['a'].sort, pyrtl.helpfulness.Needed))
+        self.assertEqual(m['a'].sort.awaited_by_set, {m['c']})
         self.assertTrue(isinstance(m['b'].sort, pyrtl.helpfulness.Needed))
+        self.assertEqual(m['b'].sort.awaited_by_set, {m['c']})
         self.assertTrue(isinstance(m['c'].sort, pyrtl.helpfulness.Dependent))
+        self.assertEqual(m['c'].sort.requires_set, {m['a'], m['b']})
         self.assertTrue(isinstance(m['d'].sort, pyrtl.helpfulness.Giving))
+        self.assertFalse(m['d'].sort.requires_set)
 
     def test_nested_connection(self):
         class Inner(pyrtl.Module):
@@ -88,10 +92,14 @@ class TestHelpfulness(unittest.TestCase):
 
         i = Inner()
         self.assertTrue(isinstance(i['x'].sort, pyrtl.helpfulness.Needed))
+        self.assertEqual(i['x'].sort.awaited_by_set, {i['y']})
         self.assertTrue(isinstance(i['y'].sort, pyrtl.helpfulness.Dependent))
+        self.assertEqual(i['y'].sort.requires_set, {i['x']})
         o = Outer()
         self.assertTrue(isinstance(o['i'].sort, pyrtl.helpfulness.Needed))
+        self.assertEqual(o['i'].sort.awaited_by_set, {o['o_foo']})
         self.assertTrue(isinstance(o['o_foo'].sort, pyrtl.helpfulness.Dependent))
+        self.assertEqual(o['o_foo'].sort.requires_set, {o['i']})
 
     def test_nested_connection_with_state(self):
         class Inner(pyrtl.Module):
@@ -118,10 +126,14 @@ class TestHelpfulness(unittest.TestCase):
 
         i = Inner()
         self.assertTrue(isinstance(i['x'].sort, pyrtl.helpfulness.Free))
+        self.assertFalse(i['x'].sort.awaited_by_set)
         self.assertTrue(isinstance(i['y'].sort, pyrtl.helpfulness.Giving))
+        self.assertFalse(i['y'].sort.requires_set)
         o = Outer()
         self.assertTrue(isinstance(o['i'].sort, pyrtl.helpfulness.Free))
+        self.assertFalse(o['i'].sort.awaited_by_set)
         self.assertTrue(isinstance(o['o_foo'].sort, pyrtl.helpfulness.Giving))
+        self.assertFalse(o['o_foo'].sort.requires_set)
 
     def test_nested_connection_with_state2(self):
         class Inner(pyrtl.Module):
@@ -151,11 +163,16 @@ class TestHelpfulness(unittest.TestCase):
 
         i = Inner()
         self.assertTrue(isinstance(i['x'].sort, pyrtl.helpfulness.Free))
+        self.assertFalse(i['x'].sort.awaited_by_set)
         self.assertTrue(isinstance(i['y'].sort, pyrtl.helpfulness.Dependent))
+        self.assertEqual(i['y'].sort.requires_set, {i['w']})
         o = Outer()
         self.assertTrue(isinstance(o['i'].sort, pyrtl.helpfulness.Free))
+        self.assertFalse(o['i'].sort.awaited_by_set)
         self.assertTrue(isinstance(o['j'].sort, pyrtl.helpfulness.Needed))
+        self.assertEqual(o['j'].sort.awaited_by_set, {o['o_foo']})
         self.assertTrue(isinstance(o['o_foo'].sort, pyrtl.helpfulness.Dependent))
+        self.assertEqual(o['o_foo'].sort.requires_set, {o['j']})
 
 if __name__ == '__main__':
     unittest.main()
