@@ -166,6 +166,9 @@ class ModInput(ModIOWire):
         w = Input(len(self), name=name, block=self.module.block)
         replace_wire(self, w, w, self.module.block)
         self.module.block.add_wirevector(w)
+        # Note that the original ModInput wire is still its parent module's internal information.
+        # This may be useful to query different properties about the original wire.
+        # _Don't_ return the new Input wire because we don't want anyone doing anything with it.
     
     def externally_connected(self):
         """ Check if this Input wire is connected to any external (outside of module) wires """
@@ -189,6 +192,9 @@ class ModOutput(ModIOWire):
         w = Output(len(self), name=name, block=self.module.block)
         replace_wire(self, w, w, self.module.block)
         self.module.block.add_wirevector(w)
+        # Note that the original ModOutput wire is still its parent module's internal information.
+        # This may be useful to query different properties about the original wire.
+        # _Don't_ return the new Output wire because we don't want anyone doing anything with it.
 
     def externally_connected(self):
         """ Check if this Output wire is connected to any external (outside of module) wires """

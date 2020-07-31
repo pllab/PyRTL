@@ -11,6 +11,17 @@ class TestHelpfulness(unittest.TestCase):
             b = self.Output(6, 'b')
             b <<= a * 4
 
+    class N(pyrtl.Module):
+        def __init__(self, name=""):
+            super().__init__(name=name)
+
+        def definition(self):
+            a = self.Input(4, 'a')
+            b = self.Output(6, 'b')
+            r = pyrtl.Register(5, 'r')
+            r.next <<= a + 1
+            b <<= r * 4
+
     def setUp(self):
         pyrtl.reset_working_block()
 
@@ -37,6 +48,20 @@ class TestHelpfulness(unittest.TestCase):
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m1['a'] <<= m3['b']
         self.assertTrue(str(ex.exception).startswith("Connection error!"))
+
+    
+    def test_three_connected_no_simple_because_state(self):
+        n1 = TestHelpfulness.N(name="n1")
+        n2 = TestHelpfulness.N(name="n2")
+        n3 = TestHelpfulness.N(name="n3")
+        n2['a'] <<= n1['b']
+        n3['a'] <<= n2['b']
+        n1['a'] <<= n3['b']
+
+        self.assertTrue(isinstance(n1['a'].sort, pyrtl.helpfulness.Free))
+        self.assertFalse(n1['a'].sort.awaited_by_set)
+        self.assertTrue(isinstance(n1['b'].sort, pyrtl.helpfulness.Giving))
+        self.assertFalse(n1['b'].sort.requires_set)
 
     def test_ill_connected(self):
         m = TestHelpfulness.M()
