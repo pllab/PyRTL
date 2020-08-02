@@ -15,9 +15,11 @@ from .memory import MemBlock, RomBlock
 
 Verbose = False
 
+# [x]
 class InputKind(abc.ABC):
     pass
 
+# [x]
 class Free(InputKind):
     def __init__(self, wire):
         self.wire = wire
@@ -26,6 +28,7 @@ class Free(InputKind):
     def __str__(self):
         return "Free"
 
+# [x]
 class Needed(InputKind):
     def __init__(self, wire, awaited_by_set):
         from .module import ModOutput
@@ -39,9 +42,11 @@ class Needed(InputKind):
         wns = ", ".join(map(str, self.awaited_by_set))
         return f"Needed (needed by: {wns})"
 
+# [x]
 class OutputKind(abc.ABC):
     pass
 
+# [x]
 class Giving(OutputKind):
     def __init__(self, wire):
         self.wire = wire
@@ -50,6 +55,7 @@ class Giving(OutputKind):
     def __str__(self):
         return "Giving"
 
+# [x]
 class Dependent(OutputKind):
     def __init__(self, wire, requires_set):
         from .module import ModInput
@@ -64,12 +70,20 @@ class Dependent(OutputKind):
         return f"Dependent (depends on: {wns})"
 
 def error_if_not_well_connected(to_wire, from_wire):
+    # NOTE: this assumes everythings is in the same working block.
+
     from .module import ModInput, ModOutput
     assert isinstance(to_wire, ModInput)
-    assert isinstance(from_wire, ModOutput)
     assert isinstance(to_wire.sort, (Free, Needed))
-    assert isinstance(from_wire.sort, (Giving, Dependent))
-    assert to_wire.module.block == from_wire.module.block
+        
+    if not isinstance(from_wire, ModOutput):
+        # get all the modoutputs that combinationally connect to this regular wire
+        from_output_wires = set(w for w in _backward_combinational_reachability(from_wire, working_block() if isinstance(w, ModOutput)))
+    else:
+        from_output_wires = {from_wire}
+
+    for from_wire in from_output_wires:
+        assert isinstance(from_wire.sort, (Giving, Dependent))
 
     # from_wire is from module 1
     # to_wire is from module 2
@@ -90,6 +104,7 @@ def error_if_not_well_connected(to_wire, from_wire):
                 assert isinstance(awaiting_wire, ModOutput)
                 block = working_block() # TODO should be consistent about what block we're using
                 # dst_dict is map from a wire to the net(s) where that wire is a source
+                # TODO may be able to just call _modular_forward_reachability() form here....
                 _, dst_dict = block.net_connections()
                 if awaiting_wire in dst_dict:
                     # Actually need to follow the connections transitively,
@@ -114,41 +129,41 @@ def error_if_not_well_connected(to_wire, from_wire):
                         print(f"{awaiting_wire} of {awaiting_wire.module.name} is still disconnected, so the circuit is still ambiguous")
 
 
+# [x]
 def annotate_module(module):
     for wire in module.inputs().union(module.outputs()):
         wire.sort = get_wire_sort(wire, module)
 
+# [x]
 def get_wire_sort(wire, module):
     from .module import ModInput, ModOutput
 
     if isinstance(wire, ModInput):
-        # Get its forward reachability
-        forward = _forward_reachability(wire, module)
+        # Get its forward reachability (wires that 'wire' combinationally affects)...
+        forward = _forward_combinational_reachability(wire, module.block)
+        # ... and then just filter for the module outputs that wire affects
         affects = set(w for w in forward if w in module.outputs())
         if affects:
             return Needed(wire, affects)
         return Free(wire)
     elif isinstance(wire, ModOutput):
-        # Get its backward reachbility
-        backward = _backward_reachability(wire, module)
+        # Get its backward reachbility (wires that 'wire' combinationally depends on)...
+        backward = _backward_combinational_reachability(wire, module.block)
+        # ... and then jus tilfter for the module inputs it depends on
         depends = set(w for w in backward if w in module.inputs())
         if depends:
             return Dependent(wire, depends)
         return Giving(wire)
     else:
-        raise Exception("Only get wire sorts of inputs/outputs")
+        raise PyrtlError("Only get wire sorts of inputs/outputs")
 
 # This function and _modular_affects_iter are used for jumping over
 # modules by, given an input, getting their affected outputs via their
 # sorts. This way we don't descend into the module logic itself
 # (theoretically saving a lot of time not having to navigate that module's
-# netlist again), instead taking advantage of the whole "awaited-by"/"requires" set
-# each module computes once on its own.
-# TODO add this to the paper formalisms.
-# TODO possibly consider merging with the normal _forward_reachability and _affects_iter
-#      functions through some combination of flags (though that might convolute those too much).
-#      Edit: especially with recent changes to detecting when to step over
-#      modules in the _forward_reachability function. TBD.
+# netlist again), instead taking advantage of the whole "awaited-by"/"requires" set that each module computes once on its own.
+# Note: this needs to be computed each time because of updates to the entire circuit
+# (though we could probably cache the previous results and only check for updates...)
 def _modular_forward_reachability(wire, module) -> Set[WireVector]:
     # Really, returns just ModInputs, at least that's the hope
     from .module import ModInput
@@ -203,98 +218,98 @@ def _modular_affects_iter(wire, dest_dict):
         affects.add(w)
     return affects
 
-def _forward_reachability(wire, module) -> Set[WireVector]:
-    """ Get the module outputs that wire combinationally affects """
-    _, dest_dict = module.block.net_connections()
-    return _affects_iter(wire, dest_dict)
+# [x]
+def _forward_combinational_reachability(wire, block=None) -> Set[WireVector]:
+    """ Get the wires that 'wire' combinationally affects
 
-def _affects_iter(wire, dest_dict):
-    """
-        :param wire: input wire whose combinationally-reachable descendant wires we want to find (within a module, hence stopping
-                     when we get to ModOutput)
-        :param dest_dict: the map from wire to the nets (plural) where that wire
-                         is a source (i.e. it helps us find the wires that this wire affects)
-                         i.e.
-                            for net in dest_dict[wire]:
-                                assert wire in net.args
+        :param wire: wire whose combinationally-reachable descendant wires we want to find
+        :param block: block to which the wire belongs
+
         Handles if there are combinational loops
     """
-    from .module import ModInput, ModOutput
-    if isinstance(wire, (ModOutput, Const, Register, MemBlock, RomBlock, Output)):
+    from .module import ModInput 
+    if isinstance(wire, (Const, Register, MemBlock, RomBlock, Output)):
         return {wire}
+    
+    block = working_block(block)
+
+    # dest_dict: the map from wire to the nets (plural) where that wire
+    # is a source (i.e. it helps us find the wires that this wire affects)
+    # i.e. for net in dest_dict[wire]:
+    #        assert wire in net.args
+    _, dest_dict = block.net_connections()
 
     # wire is Input or normal wire
     affects = set()
     tocheck = set()
 
-    for net in dest_dict[wire]:
-        # Sanity checks!
-        # assert wire in net.args # I *would* do this, but PyRTL complains about using boolean comparison on wires, *sigh*
-        # assert len(net.dests) == 1 # FYI: The *one* time when len(net.dests) is not 1 is when the net logic op is '@' (write data to mem)
-        if net.dests:
-            tocheck.add(net.dests[0])
+    if wire in dest_dict:
+        for net in dest_dict[wire]:
+            if net.dests:
+                tocheck.add(net.dests[0])
 
     while tocheck:
         w = tocheck.pop()
         if w in affects:
             continue  # already checked, possible with diamond dependency
-        if isinstance(w, ModInput) and (w.module != wire.module):
-            # Jump over inner module, just get the awaited_by_set
+
+        if (wire is not w) and isinstance(w, ModInput):
+            # If we're at a ModOutput and it's not the original wire we're checking
+            # backward reachability for, then jump over the module and just get the
+            # awaited_by_set.
             for mod_output in w.sort.awaited_by_set:
                 tocheck.add(mod_output)
-        # If we've reached our own module output, stop with this path
-        elif (isinstance(w, ModOutput) and w.module != wire.module) or not isinstance(w, (ModOutput, Output, Const, Register, MemBlock, RomBlock)):
+
+        elif not isinstance(w, (Output, Const, Register, MemBlock, RomBlock)):
             if w not in dest_dict:
                 if Verbose:
                     print(f"Warning: {w} not in dest_dict")
             else:
                 for net in dest_dict[w]:
-                    # assert w in net.args # I *would* do this, but PyRTL complains about using boolean comparison on wires, *sigh*
-                    # assert len(net.dests) == 1 # FYI: The *one* time when len(net.dests) is not 1 is when the net logic op is '@' (write data to mem)
                     if net.dests:
                         tocheck.add(net.dests[0])
         affects.add(w)
     return affects
 
-def _backward_reachability(wire, module):
-    """ Get the module inputs that wire combinationally depends on """
-    src_dict, _ = module.block.net_connections()
-    return _depends_on_iter(wire, src_dict)
+# [x]
+def _backward_combinational_reachability(wire, block=None):
+    """ Get the wires that wire combinationally depends on
 
-def _depends_on_iter(wire, src_dict):
-    """
         :param wire: output wire whose combinationally-reachable ancestor wires we want to find
-        :param src_dict: the map from wire to the net (singular) where that wire
-                         is a destination (i.e. it helps us find the wires used to make this wire)
-                         i.e. assert src_dict[wire].dests[0] == wire
+        :param block: block to which the wire belongs
 
         Handles if there are combinational loops
     """
-    from .module import ModInput, ModOutput
-    if isinstance(wire, (ModInput, Const, Register, MemBlock, RomBlock, Input)):
-        return {wire}
 
-    # wire is Output or normal wire
+    from .module import ModOutput
+    if isinstance(wire, (Const, Register, MemBlock, RomBlock, Input)):
+        return {wire}
+    
+    block = working_block(block)
     depends_on = set()
     tocheck = set()
 
-    # Sanity check!
-    # assert src_dict[wire].dests[0] == wire  # Can't do this because it elaborates to an = operator, don't want that
+    # src_dict ix the map from wire to the net (singular) where that wire
+    # is a destination (i.e. it helps us find the wires used to make this wire)
+    # i.e. assert src_dict[wire].dests[0] == wire
+    src_dict, _ = block.net_connections()
+    if wire in src_dict:
+        tocheck.update(src_dict[wire].args)
 
-    tocheck.update(set(src_dict[wire].args))
     while tocheck:
         w = tocheck.pop()
         if w in depends_on:
             continue  # already checked, possible with diamond dependency
-        if isinstance(w, ModOutput) and (w.module != wire.module):
-            # Jump over inner module, just get the requires_set
+
+        if (wire is not w) and isinstance(w, ModOutput):
+            # If we're at a ModOutput and it's not the original wire we're checking
+            # backward reachability for, then jump over the module and just get the
+            # requires_set.
             for mod_input in w.sort.requires_set:
                 tocheck.add(mod_input)
-        # If we've reached our own module input, stop with this path
-        elif (isinstance(w, ModInput) and w.module != wire.module) or not isinstance(w, (ModInput, Input, Const, Register, MemBlock, RomBlock)):
+
+        elif not isinstance(w, (Input, Const, Register, MemBlock, RomBlock)):
             if w not in src_dict:
-                # Occurs when there are no Input wires that a module input is tied to currently.
-                # Main reason: we don't have a module type nor a module input wire type
                 if Verbose:
                     print(f"Warning: {w} not in src_dict")
             else:

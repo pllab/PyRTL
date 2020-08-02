@@ -156,8 +156,13 @@ class ModInput(ModIOWire):
         # The "nested" case is always going to be outer ModInput to nested ModInput,
         # or nested ModOutput to outer ModOutput, and we actually don't need to check
         # these (proof should be following in the paper). Just check ModInput <<= ModOutput.
-        if isinstance(other, (ModOutput)):
-            error_if_not_well_connected(self, other)
+        # Actually, we need to check this in any case, because we could have the case where
+        # w = ModOutput * 3
+        # ModInput <<= w
+        # meaning having an intermediate connection. Not a big deal, since the checking
+        # will only traverse all the wires up to the nearest ModOutput, after which time
+        # it will skip over modules by just considering their requires/await sets
+        error_if_not_well_connected(self, other)
         super().__ilshift__(other)
         return self
     

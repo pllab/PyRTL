@@ -25,6 +25,74 @@ class TestHelpfulness(unittest.TestCase):
     def setUp(self):
         pyrtl.reset_working_block()
 
+    def test_reachability_no_module(self):
+        r = pyrtl.Register(1, 'r')
+        w1 = pyrtl.WireVector(1, 'w1')
+        w2 = pyrtl.WireVector(1, 'w2')
+        w3 = pyrtl.WireVector(1, 'w3')
+        w4 = pyrtl.WireVector(1, 'w4')
+        w5 = w1 & w2
+        w10 = pyrtl.Const(0)
+        r.next <<= w5 | w3
+        w8 = r ^ w10
+        w6 = ~w4
+        w7 = r ^ w6
+        w9 = w7 | w1
+
+        # Backward combinational reachability
+        for w in (w1, w2, w3, w4):
+            self.assertEqual(pyrtl.helpfulness._backward_combinational_reachability(w), set())
+        self.assertEqual(pyrtl.helpfulness._backward_combinational_reachability(w5), {w1, w2})
+        self.assertEqual(pyrtl.helpfulness._backward_combinational_reachability(w6), {w4})
+        self.assertEqual(pyrtl.helpfulness._backward_combinational_reachability(w7), {r, w6, w4})
+        self.assertEqual(pyrtl.helpfulness._backward_combinational_reachability(w8), {r, w10})
+        self.assertEqual(pyrtl.helpfulness._backward_combinational_reachability(w9), {r, w7, w6, w4, w1})
+
+        # Forward combinational reachability
+        # NOTE: despite me trying not to, some intermediate wires have been automatically
+        # created, so we'll do superset comparison for some of these.
+        self.assertTrue(pyrtl.helpfulness._forward_combinational_reachability(w1).issuperset({w5, r, w9}))
+        self.assertTrue(pyrtl.helpfulness._forward_combinational_reachability(w2).issuperset({w5, r}))
+        self.assertTrue(pyrtl.helpfulness._forward_combinational_reachability(w3).issuperset({r}))
+        self.assertEqual(pyrtl.helpfulness._forward_combinational_reachability(w4), {w6, w7, w9})
+        self.assertTrue(pyrtl.helpfulness._forward_combinational_reachability(w5).issuperset({r}))
+        self.assertEqual(pyrtl.helpfulness._forward_combinational_reachability(w6), {w7, w9})
+        self.assertEqual(pyrtl.helpfulness._forward_combinational_reachability(w8), set())
+        self.assertEqual(pyrtl.helpfulness._forward_combinational_reachability(w9), set())
+
+
+    def test_wire_sort_in_module(self):
+        class T(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                r = pyrtl.Register(1, 'r')
+                w1 = self.Input(1, 'w1')
+                w2 = self.Input(1, 'w2')
+                w3 = self.Input(1, 'w3')
+                w4 = self.Input(1, 'w4')
+                w8 = self.Output(1, 'w8')
+                w9 = self.Output(1, 'w9')
+                w5 = w1 & w2
+                w10 = pyrtl.Const(0)
+                r.next <<= w5 | w3
+                w8 <<= r ^ w10
+                w6 = ~w4
+                w7 = r ^ w6
+                w9 <<= w7 | w1
+
+        t = T()
+        self.assertTrue(isinstance(t['w1'].sort, pyrtl.helpfulness.Needed))
+        self.assertEqual(t['w1'].sort.awaited_by_set, {t['w9']})
+        self.assertTrue(isinstance(t['w2'].sort, pyrtl.helpfulness.Free))
+        self.assertTrue(isinstance(t['w3'].sort, pyrtl.helpfulness.Free))
+        self.assertTrue(isinstance(t['w4'].sort, pyrtl.helpfulness.Needed))
+        self.assertEqual(t['w4'].sort.awaited_by_set, {t['w9']})
+        self.assertTrue(isinstance(t['w8'].sort, pyrtl.helpfulness.Giving))
+        self.assertTrue(isinstance(t['w9'].sort, pyrtl.helpfulness.Dependent))
+        self.assertEqual(t['w9'].sort.requires_set, {t['w1'], t['w4']})
+
     def test_single_connected(self):
         m = TestHelpfulness.M()
         a_in = pyrtl.Input(4, 'a_in')
@@ -49,7 +117,6 @@ class TestHelpfulness(unittest.TestCase):
             m1['a'] <<= m3['b']
         self.assertTrue(str(ex.exception).startswith("Connection error!"))
 
-    
     def test_three_connected_no_simple_because_state(self):
         n1 = TestHelpfulness.N(name="n1")
         n2 = TestHelpfulness.N(name="n2")
@@ -68,6 +135,14 @@ class TestHelpfulness(unittest.TestCase):
 
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m['a'] <<= m['b']
+        self.assertTrue(str(ex.exception).startswith("Connection error!"))
+
+    def test_ill_connected_transitive(self):
+        m = TestHelpfulness.M()
+
+        x = m['b'] * 2
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            m['a'] <<= x
         self.assertTrue(str(ex.exception).startswith("Connection error!"))
 
     def test_module_from_working_block(self):
