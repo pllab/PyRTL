@@ -18,8 +18,15 @@ class TestBasicModule(unittest.TestCase):
                 b = self.Input(4, 'b')
                 c = self.Output(4, 'c')
                 d = self.Output(3, 'd')
-                c <<= a + 1
-                d <<= c + b - 2
+                w = a + 1
+                c <<= w
+                # Allowing 'd <<= c + b - 2' might be bad because we might not know c's
+                # requires_set before we need to check d, so maybe disallow
+                # outputs to be arguments to a net (like is done in overall pyrtl).
+                # I think the non-determinism in iterating over sets causes this to
+                # fault occassionally because the ModOutput it reaches doesn't have
+                # a 'sort' attribute yet.
+                d <<= w + b - 2
 
         a = A()
         self.assertFalse(a['a'].externally_connected())
@@ -41,6 +48,32 @@ class TestBasicModule(unittest.TestCase):
             "'pyrtl.Input' and 'pyrtl.Output' to declare the IO wirevectors, "
             "and that you are accessing them from the correct module."
         )
+
+    # TODO I don't have this check actually happening yet,
+    # so for, just don't do the bad thing.
+    def _test_bad_output_as_arg(self):
+        class A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                a = self.Input(3, 'a')
+                b = self.Input(4, 'b')
+                c = self.Output(4, 'c')
+                d = self.Output(3, 'd')
+                c <<= a + 1
+                # Allowing 'd <<= c + b - 2' is treated as bad because we might
+                # not know c's requires_set before we need to check d.
+                # I think the non-determinism in iterating over sets woudl causes
+                # this to fault occassionally because the ModOutput it
+                # reaches doesn't have a 'sort' attribute yet.
+                d <<= c + b - 2
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            A()
+        self.assertEqual(str(ex.exception),
+            f"Invalid module. Module output c cannot be "
+            "used on the rhs of <<= while within a module definition.")
     
     def test_no_super_call_in_initializer(self):
         class M(pyrtl.Module):

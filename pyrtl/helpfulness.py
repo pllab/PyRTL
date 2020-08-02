@@ -77,56 +77,57 @@ def error_if_not_well_connected(to_wire, from_wire):
     assert isinstance(to_wire.sort, (Free, Needed))
         
     if not isinstance(from_wire, ModOutput):
-        # get all the modoutputs that combinationally connect to this regular wire
-        from_output_wires = set(w for w in _backward_combinational_reachability(from_wire, working_block() if isinstance(w, ModOutput)))
+        # get all the ModOutputs that combinationally connect to this regular wire
+        # TODO check this, it may getting all ModOutputs, not just the nearest
+        from_output_wires = set(w for w in _backward_combinational_reachability(from_wire) if isinstance(w, ModOutput))
     else:
         from_output_wires = {from_wire}
 
     for from_wire in from_output_wires:
         assert isinstance(from_wire.sort, (Giving, Dependent))
 
-    # from_wire is from module 1
-    # to_wire is from module 2
-    #
-    # for each input wire w1 required by 'from_wire' (all of which are inputs to module 1):
-    #   for each output wire w2 awaiting 'to_wire' (all of which are outputs of module 2):
-    #       ensure w2 is **not** connected to w1
-    if isinstance(to_wire.sort, Needed) and isinstance(from_wire.sort, Dependent):
-        if to_wire in from_wire.sort.requires_set or from_wire in to_wire.sort.awaited_by_set:
-            # Trivial loop (we need this check if we're *not* inserting the connection
-            # before checking; otherwise the check below suffices)
-            raise PyrtlError(
-                "Connection error!\n"
-                f"{str(to_wire)} <<= {str(from_wire)}\n")
-        for required_wire in from_wire.sort.requires_set:
-            for awaiting_wire in to_wire.sort.awaited_by_set:
-                assert isinstance(required_wire, ModInput)
-                assert isinstance(awaiting_wire, ModOutput)
-                block = working_block() # TODO should be consistent about what block we're using
-                # dst_dict is map from a wire to the net(s) where that wire is a source
-                # TODO may be able to just call _modular_forward_reachability() form here....
-                _, dst_dict = block.net_connections()
-                if awaiting_wire in dst_dict:
-                    # Actually need to follow the connections transitively,
-                    # since PyRTL adds intermediate wires...
-                    for net in dst_dict[awaiting_wire]:
-                        # TODO we need to cross-over modules, but not enter them.
-                        # i.e. if our net is dest is a module input, then continue
-                        # with _that_ module's awaited_by_set, etc. until we can't
-                        # go anymore (no non-stateful interceding elements) OR we hit
-                        # out own from_wire again.
-                        descendants = _modular_forward_reachability(net.dests[0], to_wire.module)
-                        descendants.add(net.dests[0])
-                        if required_wire in descendants:
-                            raise PyrtlError(
-                                # TODO Include information about the lineage of wires causing this problem
-                                "Connection error!\n"
-                                f"{str(to_wire)} <<= {str(from_wire)}\n")
-                else:
-                    # It's ambiguous, since we don't know for sure until the # entire circuit is connected.
-                    # TODO improve this message, it's not very accurate/clear
-                    if Verbose:
-                        print(f"{awaiting_wire} of {awaiting_wire.module.name} is still disconnected, so the circuit is still ambiguous")
+        # from_wire is from module 1
+        # to_wire is from module 2
+        #
+        # for each input wire w1 required by 'from_wire' (all of which are inputs to module 1):
+        #   for each output wire w2 awaiting 'to_wire' (all of which are outputs of module 2):
+        #       ensure w2 is **not** connected to w1
+        if isinstance(to_wire.sort, Needed) and isinstance(from_wire.sort, Dependent):
+            if to_wire in from_wire.sort.requires_set or from_wire in to_wire.sort.awaited_by_set:
+                # Trivial loop (we need this check if we're *not* inserting the connection
+                # before checking; otherwise the check below suffices)
+                raise PyrtlError(
+                    "Connection error!\n"
+                    f"{str(to_wire)} <<= {str(from_wire)}\n")
+            for required_wire in from_wire.sort.requires_set:
+                for awaiting_wire in to_wire.sort.awaited_by_set:
+                    assert isinstance(required_wire, ModInput)
+                    assert isinstance(awaiting_wire, ModOutput)
+                    block = working_block() # TODO should be consistent about what block we're using
+                    # dst_dict is map from a wire to the net(s) where that wire is a source
+                    # TODO may be able to just call _modular_forward_reachability() form here....
+                    _, dst_dict = block.net_connections()
+                    if awaiting_wire in dst_dict:
+                        # Actually need to follow the connections transitively,
+                        # since PyRTL adds intermediate wires...
+                        for net in dst_dict[awaiting_wire]:
+                            # TODO we need to cross-over modules, but not enter them.
+                            # i.e. if our net is dest is a module input, then continue
+                            # with _that_ module's awaited_by_set, etc. until we can't
+                            # go anymore (no non-stateful interceding elements) OR we hit
+                            # out own from_wire again.
+                            descendants = _modular_forward_reachability(net.dests[0], to_wire.module)
+                            descendants.add(net.dests[0])
+                            if required_wire in descendants:
+                                raise PyrtlError(
+                                    # TODO Include information about the lineage of wires causing this problem
+                                    "Connection error!\n"
+                                    f"{str(to_wire)} <<= {str(from_wire)}\n")
+                    else:
+                        # It's ambiguous, since we don't know for sure until the # entire circuit is connected.
+                        # TODO improve this message, it's not very accurate/clear
+                        if Verbose:
+                            print(f"{awaiting_wire} of {awaiting_wire.module.name} is still disconnected, so the circuit is still ambiguous")
 
 
 # [x]

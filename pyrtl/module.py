@@ -188,6 +188,12 @@ class ModOutput(ModIOWire):
             raise PyrtlError(f"Invalid module. Module output {str(self)} can only "
                               "be used on the lhs of <<= while within a module definition.")
 
+        if isinstance(other, ModOutput) and self.module == other.module:
+            # Check for equivalent modules because it's okay if it's a connection
+            # from an outer module to a nested module.
+            raise PyrtlError(f"Invalid module. Module output {str(other)} cannot be "
+                              "used on the rhs of <<= while within a module definition.")
+
         # The only way to have access to a module's **unconnected** ModOuput wire is
         # when we're within a module's definition, meaning there is nothing to check yet.
         return super().__ilshift__(other)
