@@ -158,23 +158,15 @@ def get_wire_sort(wire, module):
     else:
         raise PyrtlError("Only get wire sorts of inputs/outputs")
 
-# This function and _modular_affects_iter are used for jumping over
-# modules by, given an input, getting their affected outputs via their
-# sorts. This way we don't descend into the module logic itself
-# (theoretically saving a lot of time not having to navigate that module's
-# netlist again), instead taking advantage of the whole "awaited-by"/"requires" set that each module computes once on its own.
-# Note: this needs to be computed each time because of updates to the entire circuit
-# (though we could probably cache the previous results and only check for updates...)
 def _modular_forward_reachability(wire, module) -> Set[WireVector]:
     # Really, returns just ModInputs, at least that's the hope
     from .module import ModInput
-    _, dest_dict = module.block.net_connections()
     to_check = {wire}
     affects_inputs = set()
 
     while to_check:
         w = to_check.pop()
-        affected_mod_inputs = set(w for w in _modular_affects_iter(w, dest_dict) if isinstance(w, ModInput))
+        affected_mod_inputs = set(w for w in _forward_combinational_reachability(w, module.block) if isinstance(w, ModInput))
         for mod_input in affected_mod_inputs:
             for awaiting_output_wire in mod_input.sort.awaited_by_set:
                 to_check.add(awaiting_output_wire)
@@ -184,42 +176,14 @@ def _modular_forward_reachability(wire, module) -> Set[WireVector]:
     return affects_inputs
 
 
-def _modular_affects_iter(wire, dest_dict):
-    from .module import ModInput
-    if isinstance(wire, (ModInput, Const, Register, MemBlock, RomBlock, Input, Output)):
-        return {wire}
-
-    affects = set()
-    tocheck = set()
-
-    if wire not in dest_dict:
-        return {wire}
-
-    for net in dest_dict[wire]:
-        # Sanity checks!
-        # assert wire in net.args # I *would* do this, but PyRTL complains about using boolean comparison on wires, *sigh*
-        # assert len(net.dests) == 1 # FYI: The *one* time when len(net.dests) is not 1 is when the net logic op is '@' (write data to mem)
-        if net.dests:
-            tocheck.add(net.dests[0])
-
-    while tocheck:
-        w = tocheck.pop()
-        if w in affects:
-            continue  # already checked, possible with diamond dependency
-        if not isinstance(w, (ModInput, Input, Output, Const, Register, MemBlock, RomBlock)):
-            if w not in dest_dict:
-                if Verbose:
-                    print(f"Warning: {w} not in dest_dict")
-            else:
-                for net in dest_dict[w]:
-                    # assert w in net.args # I *would* do this, but PyRTL complains about using boolean comparison on wires, *sigh*
-                    # assert len(net.dests) == 1 # FYI: The *one* time when len(net.dests) is not 1 is when the net logic op is '@' (write data to mem)
-                    if net.dests:
-                        tocheck.add(net.dests[0])
-        affects.add(w)
-    return affects
-
 # [x]
+# For forward combinational reachability, if the wire we're checking
+# is a ModInput, then get all the wires it affects combinationally inside its module.
+# Otherwise, transitively go forward, and when you reach a ModInput,
+# continue with the ModOutput wires in that ModInput's awaited_by set
+# (which has already been computed once per other module),
+# so we don't descend into the module itself, theoretically saving time
+# by not having to navigate any modules' netlist.
 def _forward_combinational_reachability(wire, block=None) -> Set[WireVector]:
     """ Get the wires that 'wire' combinationally affects
 
@@ -273,6 +237,13 @@ def _forward_combinational_reachability(wire, block=None) -> Set[WireVector]:
     return affects
 
 # [x]
+# For backward combinational reachability, if the wire we're checking
+# is a ModOutput, then get all the wires it depends on combinationally inside its module.
+# Otherwise, transitively go backward, and when you reach a ModOutput,
+# continue with the ModInput wires in that ModOutput's depends set
+# (which has already been computed once per other module),
+# so we don't descend into the module itself, theoretically saving time
+# by not having to navigate any modules' netlist.
 def _backward_combinational_reachability(wire, block=None):
     """ Get the wires that wire combinationally depends on
 
