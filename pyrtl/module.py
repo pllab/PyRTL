@@ -147,7 +147,8 @@ class ModInput(ModIOWire):
 
     def __init__(self, bitwidth: int, name: str, module: Module, sort=None):
         if sort and sort not in (Free, Needed):
-            raise PyrtlError(f"Invalid sort ascription for input {name}")
+            raise PyrtlError(f"Invalid sort ascription for input {name} "
+                "(must provide either Free or Needed)")
         self.sort = sort
         super().__init__(bitwidth, name, module)
     
@@ -190,7 +191,8 @@ class ModOutput(ModIOWire):
 
     def __init__(self, bitwidth: int, name: str, module: Module, sort=None):
         if sort and sort not in (Giving, Dependent):
-            raise PyrtlError(f"Invalid sort ascription for output {name}")
+            raise PyrtlError(f"Invalid sort ascription for output {name} "
+                "(must provide either Giving or Dependent)")
         self.sort = sort
         super().__init__(bitwidth, name, module)
 

@@ -23,6 +23,10 @@ from .wire import Register
 from .module import Module
 from .module import module_from_block
 
+# dependency sorts
+from .helpfulness import Free, Needed
+from .helpfulness import Giving, Dependent
+
 # helper functions
 from .helperfuncs import input_list
 from .helperfuncs import output_list

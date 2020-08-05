@@ -389,7 +389,7 @@ class TestHelpfulness(unittest.TestCase):
         self.assertEqual(set(w for w in pyrtl.helpfulness._backward_combinational_reachability(w2)
             if isinstance(w, pyrtl.module.ModOutput)), {l['c']})
     
-    def test_valid_sort_ascriptions(self):
+    def test_good_sort_ascriptions(self):
         class L(pyrtl.Module):
             def __init__(self, name=""):
                 super().__init__(name=name)
@@ -406,7 +406,7 @@ class TestHelpfulness(unittest.TestCase):
         
         L()
 
-    def test_invalid_sort_ascriptions(self):
+    def test_bad_sort_ascriptions(self):
         class L(pyrtl.Module):
             def __init__(self, name=""):
                 super().__init__(name=name)
@@ -427,6 +427,38 @@ class TestHelpfulness(unittest.TestCase):
             "Unmatched sort ascription on wire a/4W.\n"
             "User provided Needed\n"
             "But computed Free")
+
+    def test_invalid_input_sort_ascription(self):
+        class L(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a', sort=pyrtl.helpfulness.Dependent)
+                b = self.Output(6, 'b', sort=pyrtl.helpfulness.Dependent)
+                b <<= r * 4
+        
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            L()
+        self.assertEqual(str(ex.exception),
+            ("Invalid sort ascription for input a "
+             "(must provide either Free or Needed)"))
+
+    def test_invalid_output_sort_ascription(self):
+        class L(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a', sort=pyrtl.helpfulness.Needed)
+                b = self.Output(6, 'b', sort=pyrtl.helpfulness.Needed)
+                b <<= r * 4
+        
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            L()
+        self.assertEqual(str(ex.exception),
+            ("Invalid sort ascription for output b "
+             "(must provide either Giving or Dependent)"))
 
 if __name__ == '__main__':
     unittest.main()
