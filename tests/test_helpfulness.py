@@ -316,5 +316,54 @@ class TestHelpfulness(unittest.TestCase):
             m['b'] <<= w2
         self.assertTrue(str(ex.exception).startswith("Connection error!"))
 
+    def test_is_wire_connected_to_an_input(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            
+            def definition(self):
+                a = self.Input(4, 'a')
+                b = self.Output(4, 'b')
+                b <<= a
+    
+        m = M()
+        w1 = pyrtl.WireVector(4)
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w1)
+            if isinstance(w, pyrtl.module.ModInput)), set())
+        w2 = w1 * 2
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w2)
+            if isinstance(w, pyrtl.module.ModInput)), set())
+        m['a'] <<= w2
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w1)
+            if isinstance(w, pyrtl.module.ModInput)), {m['a']})
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w2)
+            if isinstance(w, pyrtl.module.ModInput)), {m['a']})
+
+    def test_is_wire_connected_to_inputs_transitive(self):
+        class L(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            
+            def definition(self):
+                a = self.Input(4, 'a')
+                b = self.Input(4, 'b')
+                c = self.Output(4, 'c')
+                r = pyrtl.Register(4)
+                c <<= a + 1
+                r.next <<= b
+
+        l = L()
+        m = TestHelpfulness.M()
+        w1 = pyrtl.WireVector(4)
+        l['a'] <<= w1
+        w2 = l['c'] * 2
+        m['a'] <<= w2
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w1, transitive=True)
+            if isinstance(w, pyrtl.module.ModInput)), {l['a'], m['a']})
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w1)
+            if isinstance(w, pyrtl.module.ModInput)), {l['a']})
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w2)
+            if isinstance(w, pyrtl.module.ModInput)), {m['a']})
+
 if __name__ == '__main__':
     unittest.main()

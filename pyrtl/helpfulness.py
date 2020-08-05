@@ -81,6 +81,15 @@ def error_if_not_well_connected(from_wire, to_wire):
         to_input_wires = set(w for w in _forward_combinational_reachability(to_wire) if isinstance(w, ModInput))
     else:
         to_input_wires = {to_wire}
+    
+    # Since we have a call in WireVector.__ilshift__ (i.e. connecting
+    # arbitrary wires), rather than just when connecting to known ModInputs,
+    # we need to make sure we're not inside a module definition.
+    # This function only works when analyzing connections between modules
+    # that have already been analyzed.
+    for io_wire in from_output_wires.union(to_input_wires):
+        if io_wire.module.in_definition:
+            return
 
     for from_wire in from_output_wires:
         assert isinstance(from_wire, ModOutput)
@@ -180,9 +189,14 @@ def _forward_combinational_reachability(wire, transitive=False, block=None) -> S
         if w in affects:
             continue  # already checked, possible with diamond dependency
 
-        if (wire is not w) and isinstance(w, ModInput) and transitive:
-            # If we're at a ModOutput and it's not the original wire we're checking
-            # backward reachability for, then jump over the module and just get the
+        affects.add(w)
+
+        if isinstance(w, ModInput) and not transitive:
+            continue
+
+        if (wire is not w) and isinstance(w, ModInput):
+            # If we're at a ModInput and it's not the original wire we're checking
+            # forward reachability for, then jump over the module and just get the
             # awaited_by_set.
             for mod_output in w.sort.awaited_by_set:
                 tocheck.add(mod_output)
@@ -195,7 +209,6 @@ def _forward_combinational_reachability(wire, transitive=False, block=None) -> S
                 for net in dest_dict[w]:
                     if net.dests:
                         tocheck.add(net.dests[0])
-        affects.add(w)
     return affects
 
 # For backward combinational reachability, if the wire we're checking
