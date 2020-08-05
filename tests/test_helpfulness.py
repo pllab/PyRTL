@@ -388,6 +388,45 @@ class TestHelpfulness(unittest.TestCase):
             if isinstance(w, pyrtl.module.ModOutput)), {l['c'], m['b']})
         self.assertEqual(set(w for w in pyrtl.helpfulness._backward_combinational_reachability(w2)
             if isinstance(w, pyrtl.module.ModOutput)), {l['c']})
+    
+    def test_valid_sort_ascriptions(self):
+        class L(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a', sort=pyrtl.helpfulness.Free)
+                b = self.Output(6, 'b', sort=pyrtl.helpfulness.Giving)
+                c = self.Input(2, 'c', sort=pyrtl.helpfulness.Needed)
+                d = self.Output(2, 'd', sort=pyrtl.helpfulness.Dependent)
+                r = pyrtl.Register(5, 'r')
+                r.next <<= a + 1
+                b <<= r * 4
+                d <<= c - 1
+        
+        L()
+
+    def test_invalid_sort_ascriptions(self):
+        class L(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a', sort=pyrtl.helpfulness.Needed)
+                b = self.Output(6, 'b', sort=pyrtl.helpfulness.Giving)
+                c = self.Input(2, 'c', sort=pyrtl.helpfulness.Needed)
+                d = self.Output(2, 'd', sort=pyrtl.helpfulness.Dependent)
+                r = pyrtl.Register(5, 'r')
+                r.next <<= a + 1
+                b <<= r * 4
+                d <<= c - 1
+        
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            L()
+        self.assertEqual(str(ex.exception),
+            "Unmatched sort ascription on wire a/4W.\n"
+            "User provided Needed\n"
+            "But computed Free")
 
 if __name__ == '__main__':
     unittest.main()

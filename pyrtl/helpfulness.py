@@ -15,10 +15,10 @@ from .memory import MemBlock, RomBlock
 
 Verbose = False
 
-class InputKind(abc.ABC):
+class InputSort(abc.ABC):
     pass
 
-class Free(InputKind):
+class Free(InputSort):
     def __init__(self, wire):
         self.wire = wire
         self.awaited_by_set = set()
@@ -26,7 +26,7 @@ class Free(InputKind):
     def __str__(self):
         return "Free"
 
-class Needed(InputKind):
+class Needed(InputSort):
     def __init__(self, wire, awaited_by_set):
         from .module import ModOutput
         self.wire = wire
@@ -39,10 +39,10 @@ class Needed(InputKind):
         wns = ", ".join(map(str, self.awaited_by_set))
         return f"Needed (needed by: {wns})"
 
-class OutputKind(abc.ABC):
+class OutputSort(abc.ABC):
     pass
 
-class Giving(OutputKind):
+class Giving(OutputSort):
     def __init__(self, wire):
         self.wire = wire
         self.requires_set = set()
@@ -50,7 +50,7 @@ class Giving(OutputKind):
     def __str__(self):
         return "Giving"
 
-class Dependent(OutputKind):
+class Dependent(OutputSort):
     def __init__(self, wire, requires_set):
         from .module import ModInput
         self.wire = wire
@@ -124,7 +124,16 @@ def error_if_not_well_connected(from_wire, to_wire):
 
 def annotate_module(module):
     for wire in module.inputs().union(module.outputs()):
-        wire.sort = get_wire_sort(wire, module)
+        sort = get_wire_sort(wire, module)
+        # If wire.sort was ascribed, check it and report if not matching
+        # We have the user provide the classname of the sort, rather
+        # than an actual instance of the class.
+        if wire.sort and not isinstance(sort, wire.sort):
+            raise PyrtlError(
+                f"Unmatched sort ascription on wire {str(wire)}.\n"
+                f"User provided {wire.sort.__name__}\n"
+                f"But computed {str(sort)}")
+        wire.sort = sort
 
 def get_wire_sort(wire, module):
     from .module import ModInput, ModOutput

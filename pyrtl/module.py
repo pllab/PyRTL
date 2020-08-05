@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Set
 from .core import working_block, Block
-from .helpfulness import annotate_module, error_if_not_well_connected
+from .helpfulness import annotate_module, error_if_not_well_connected, Free, Needed, Giving, Dependent
 from .pyrtlexceptions import PyrtlError
 from .wire import WireVector, Input, Output
 from .transform import replace_wire
@@ -11,13 +11,13 @@ class Module(ABC):
     def definition(self, *args):
         pass
 
-    def Input(self, bitwidth, name):
-        wv = ModInput(bitwidth, name, self)
+    def Input(self, bitwidth, name, sort=None):
+        wv = ModInput(bitwidth, name, self, sort)
         self.input_dict[name] = wv
         return wv
 
-    def Output(self, bitwidth, name):
-        wv = ModOutput(bitwidth, name, self)
+    def Output(self, bitwidth, name, sort=None):
+        wv = ModOutput(bitwidth, name, self, sort)
         self.output_dict[name] = wv
         return wv
     
@@ -144,6 +144,12 @@ class ModIOWire(WireVector):
         pass
 
 class ModInput(ModIOWire):
+
+    def __init__(self, bitwidth: int, name: str, module: Module, sort=None):
+        if sort and sort not in (Free, Needed):
+            raise PyrtlError(f"Invalid sort ascription for input {name}")
+        self.sort = sort
+        super().__init__(bitwidth, name, module)
     
     def __ilshift__(self, other):
         """ self(ModInput) <<= other """
@@ -181,6 +187,12 @@ class ModInput(ModIOWire):
         return self in src_dict
 
 class ModOutput(ModIOWire):
+
+    def __init__(self, bitwidth: int, name: str, module: Module, sort=None):
+        if sort and sort not in (Giving, Dependent):
+            raise PyrtlError(f"Invalid sort ascription for output {name}")
+        self.sort = sort
+        super().__init__(bitwidth, name, module)
 
     def __ilshift__(self, other):
         """ self(ModOutput) <<= other """
