@@ -60,7 +60,6 @@ class TestHelpfulness(unittest.TestCase):
         self.assertEqual(pyrtl.helpfulness._forward_combinational_reachability(w8), set())
         self.assertEqual(pyrtl.helpfulness._forward_combinational_reachability(w9), set())
 
-
     def test_wire_sort_in_module(self):
         class T(pyrtl.Module):
             def __init__(self):
@@ -200,6 +199,29 @@ class TestHelpfulness(unittest.TestCase):
         self.assertEqual(o['i'].sort.awaited_by_set, {o['o_foo']})
         self.assertTrue(isinstance(o['o_foo'].sort, pyrtl.helpfulness.Dependent))
         self.assertEqual(o['o_foo'].sort.requires_set, {o['i']})
+
+    def test_loop_after_many_steps(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            
+            def definition(self):
+                a = self.Input(4, 'a')
+                b = self.Output(4, 'b')
+                b <<= a + 1
+                
+        # Tests the scenario where you connect
+        # module input to something (say X), then
+        # connect module output to something else (say Y),
+        # and then later connect X to Y.
+
+        m = M()
+        w1 = pyrtl.WireVector(4)
+        m['a'] <<= w1
+        w2 = m['b'] * 2
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            w1 <<= w2
+        self.assertTrue(str(ex.exception).startswith("Connection error!"))
 
     def test_nested_connection_with_state(self):
         class Inner(pyrtl.Module):

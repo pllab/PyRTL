@@ -339,6 +339,29 @@ class TestBasicModule(unittest.TestCase):
         outputs = {'o_foo': [11]}
         sim = pyrtl.Simulation()
         sim.step_multiple(inputs, outputs)
+    
+    def test_is_wire_connected_to_an_input(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            
+            def definition(self):
+                a = self.Input(4, 'a')
+                b = self.Output(4, 'b')
+                b <<= a
+    
+        m = M()
+        w1 = pyrtl.WireVector(4)
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w1)
+            if isinstance(w, pyrtl.module.ModInput)), set())
+        w2 = w1 * 2
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w2)
+            if isinstance(w, pyrtl.module.ModInput)), set())
+        m['a'] <<= w2
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w1)
+            if isinstance(w, pyrtl.module.ModInput)), {m['a']})
+        self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w2)
+            if isinstance(w, pyrtl.module.ModInput)), {m['a']})
 
 class TestModuleImport(unittest.TestCase):
 

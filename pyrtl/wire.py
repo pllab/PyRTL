@@ -174,6 +174,12 @@ class WireVector(object):
 
         other = self._prepare_for_assignment(other)
         self._build(other)
+        # To handle the case where this is the missing link between one module's
+        # output and another module's input, need to check well-connectedness.
+        # It only does a check if determines that `self` is connected to a module input
+        # (going forwards) or if `other` is connected to a module output (going backwards)
+        from .helpfulness import error_if_not_well_connected
+        error_if_not_well_connected(other, self)
         return self
 
     def __ior__(self, other):

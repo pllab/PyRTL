@@ -63,45 +63,55 @@ class Dependent(OutputKind):
         wns = ", ".join(map(str, self.requires_set))
         return f"Dependent (depends on: {wns})"
 
-def error_if_not_well_connected(to_wire, from_wire):
+# Possibly several things to make this more efficient:
+# - check for ill-connectedness during the process, not just after getting the reachability set
+# - cache the results
+def error_if_not_well_connected(from_wire, to_wire):
     # NOTE: this assumes everythings is in the same working block.
-
     from .module import ModInput, ModOutput
-    assert isinstance(to_wire, ModInput)
-    assert isinstance(to_wire.sort, (Free, Needed))
         
     if not isinstance(from_wire, ModOutput):
-        # get all the ModOutputs that combinationally connect to this regular wire
-        # NOTE it may getting all ModOutputs, not just the nearest; which may or may not be a big deal
+        # get all the closest ModOutputs that combinationally connect to this regular wire
         from_output_wires = set(w for w in _backward_combinational_reachability(from_wire) if isinstance(w, ModOutput))
     else:
         from_output_wires = {from_wire}
 
+    if not isinstance(to_wire, ModInput):
+        # get all the closest ModInputs that this wire combinationally connects to
+        to_input_wires = set(w for w in _forward_combinational_reachability(to_wire) if isinstance(w, ModInput))
+    else:
+        to_input_wires = {to_wire}
+
     for from_wire in from_output_wires:
+        assert isinstance(from_wire, ModOutput)
         assert isinstance(from_wire.sort, (Giving, Dependent))
 
-        # from_wire is from module 1
-        # to_wire is from module 2
-        #
-        # for each input wire 'required_wire' required by 'from_wire' (all of which are inputs to module 1):
-        #   for each output wire 'awaiting_wire' awaiting 'to_wire' (all of which are outputs of module 2):
-        #       ensure 'awaiting_wire' is **not** transitively combinationally connected to 'required_wire'
-        if isinstance(to_wire.sort, Needed) and isinstance(from_wire.sort, Dependent):
-            if to_wire in from_wire.sort.requires_set or from_wire in to_wire.sort.awaited_by_set:
-                # Trivial loop (we need this check if we're *not* inserting the connection
-                # before checking; otherwise the check below suffices)
-                raise PyrtlError(
-                    "Connection error!\n"
-                    f"{str(to_wire)} <<= {str(from_wire)}\n")
-            for required_wire in from_wire.sort.requires_set:
-                for awaiting_wire in to_wire.sort.awaited_by_set:
-                    assert isinstance(required_wire, ModInput)
-                    assert isinstance(awaiting_wire, ModOutput)
+        for to_wire in to_input_wires:
+            assert isinstance(to_wire, ModInput)
+            assert isinstance(to_wire.sort, (Free, Needed))
 
-                    descendants = _forward_combinational_reachability(awaiting_wire)
-                    descendants.add(awaiting_wire)
-                    if required_wire in descendants:
-                        raise PyrtlError("Connection error!\n" f"{str(to_wire)} <<= {str(from_wire)}\n")
+            # from_wire is from module 1
+            # to_wire is from module 2
+            #
+            # for each input wire 'required_wire' required by 'from_wire' (all of which are inputs to module 1):
+            #   for each output wire 'awaiting_wire' awaiting 'to_wire' (all of which are outputs of module 2):
+            #       ensure 'awaiting_wire' is **not** transitively combinationally connected to 'required_wire'
+            if isinstance(to_wire.sort, Needed) and isinstance(from_wire.sort, Dependent):
+                if to_wire in from_wire.sort.requires_set or from_wire in to_wire.sort.awaited_by_set:
+                    # Trivial loop (we need this check if we're *not* inserting the connection
+                    # before checking; otherwise the check below suffices)
+                    raise PyrtlError(
+                        "Connection error!\n"
+                        f"{str(to_wire)} <<= {str(from_wire)}\n")
+                for required_wire in from_wire.sort.requires_set:
+                    for awaiting_wire in to_wire.sort.awaited_by_set:
+                        assert isinstance(required_wire, ModInput)
+                        assert isinstance(awaiting_wire, ModOutput)
+
+                        descendants = _forward_combinational_reachability(awaiting_wire, transitive=True)
+                        descendants.add(awaiting_wire)
+                        if required_wire in descendants:
+                            raise PyrtlError("Connection error!\n" f"{str(to_wire)} <<= {str(from_wire)}\n")
 
 def annotate_module(module):
     for wire in module.inputs().union(module.outputs()):
@@ -111,7 +121,7 @@ def get_wire_sort(wire, module):
     from .module import ModInput, ModOutput
 
     if isinstance(wire, ModInput):
-        # Get its forward reachability (wires that 'wire' combinationally affects)...
+        # Get its forward reachability (wires that 'wire' combinationally affects WITHIN this module)...
         forward = _forward_combinational_reachability(wire, module.block)
         # ... and then just filter for the module outputs that wire affects
         affects = set(w for w in forward if w in module.outputs())
@@ -119,7 +129,7 @@ def get_wire_sort(wire, module):
             return Needed(wire, affects)
         return Free(wire)
     elif isinstance(wire, ModOutput):
-        # Get its backward reachbility (wires that 'wire' combinationally depends on)...
+        # Get its backward reachbility (wires that 'wire' combinationally depends on WITHIN this module)...
         backward = _backward_combinational_reachability(wire, module.block)
         # ... and then jus tilfter for the module inputs it depends on
         depends = set(w for w in backward if w in module.inputs())
@@ -136,7 +146,7 @@ def get_wire_sort(wire, module):
 # (which has already been computed once per other module),
 # so we don't descend into the module itself, theoretically saving time
 # by not having to navigate any modules' netlist.
-def _forward_combinational_reachability(wire, block=None) -> Set[WireVector]:
+def _forward_combinational_reachability(wire, transitive=False, block=None) -> Set[WireVector]:
     """ Get the wires that 'wire' combinationally affects
 
         :param wire: wire whose combinationally-reachable descendant wires we want to find
@@ -170,7 +180,7 @@ def _forward_combinational_reachability(wire, block=None) -> Set[WireVector]:
         if w in affects:
             continue  # already checked, possible with diamond dependency
 
-        if (wire is not w) and isinstance(w, ModInput):
+        if (wire is not w) and isinstance(w, ModInput) and transitive:
             # If we're at a ModOutput and it's not the original wire we're checking
             # backward reachability for, then jump over the module and just get the
             # awaited_by_set.
@@ -195,7 +205,7 @@ def _forward_combinational_reachability(wire, block=None) -> Set[WireVector]:
 # (which has already been computed once per other module),
 # so we don't descend into the module itself, theoretically saving time
 # by not having to navigate any modules' netlist.
-def _backward_combinational_reachability(wire, block=None):
+def _backward_combinational_reachability(wire, transitive=False, block=None):
     """ Get the wires that wire combinationally depends on
 
         :param wire: output wire whose combinationally-reachable ancestor wires we want to find
@@ -224,7 +234,7 @@ def _backward_combinational_reachability(wire, block=None):
         if w in depends_on:
             continue  # already checked, possible with diamond dependency
 
-        if (wire is not w) and isinstance(w, ModOutput):
+        if (wire is not w) and isinstance(w, ModOutput) and transitive:
             # If we're at a ModOutput and it's not the original wire we're checking
             # backward reachability for, then jump over the module and just get the
             # requires_set.

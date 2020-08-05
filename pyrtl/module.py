@@ -162,7 +162,7 @@ class ModInput(ModIOWire):
         # meaning having an intermediate connection. Not a big deal, since the checking
         # will only traverse all the wires up to the nearest ModOutput, after which time
         # it will skip over modules by just considering their requires/await sets
-        error_if_not_well_connected(self, other)
+        error_if_not_well_connected(other, self)
         super().__ilshift__(other)
         return self
     
