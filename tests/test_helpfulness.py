@@ -296,5 +296,25 @@ class TestHelpfulness(unittest.TestCase):
         self.assertTrue(isinstance(o['o_foo'].sort, pyrtl.helpfulness.Dependent))
         self.assertEqual(o['o_foo'].sort.requires_set, {o['j']})
 
+    def test_outputs_to_multiple_connections(self):
+        class M(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a')
+                b = self.Input(6, 'b')
+                c = self.Output(6, 'c')
+                c <<= a * 4 - b
+        m = M()
+        w1 = m['c'] * 4
+        w2 = m['c'] + 2
+        r = pyrtl.Register(8)
+        r.next <<= w1
+        m['a'] <<= r
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            m['b'] <<= w2
+        self.assertTrue(str(ex.exception).startswith("Connection error!"))
+
 if __name__ == '__main__':
     unittest.main()
