@@ -365,5 +365,29 @@ class TestHelpfulness(unittest.TestCase):
         self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w2)
             if isinstance(w, pyrtl.module.ModInput)), {m['a']})
 
+    def test_is_wire_connected_to_outputs_transitive(self):
+        class L(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            
+            def definition(self):
+                a = self.Input(4, 'a')
+                b = self.Input(4, 'b')
+                c = self.Output(4, 'c')
+                r = pyrtl.Register(4)
+                c <<= a + 1
+                r.next <<= b
+
+        l = L()
+        m = TestHelpfulness.M()
+        w1 = pyrtl.WireVector(4)
+        l['a'] <<= w1
+        w2 = l['c'] * 2
+        w1 <<= m['b']
+        self.assertEqual(set(w for w in pyrtl.helpfulness._backward_combinational_reachability(w2, transitive=True)
+            if isinstance(w, pyrtl.module.ModOutput)), {l['c'], m['b']})
+        self.assertEqual(set(w for w in pyrtl.helpfulness._backward_combinational_reachability(w2)
+            if isinstance(w, pyrtl.module.ModOutput)), {l['c']})
+
 if __name__ == '__main__':
     unittest.main()

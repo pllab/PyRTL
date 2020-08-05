@@ -247,7 +247,12 @@ def _backward_combinational_reachability(wire, transitive=False, block=None):
         if w in depends_on:
             continue  # already checked, possible with diamond dependency
 
-        if (wire is not w) and isinstance(w, ModOutput) and transitive:
+        depends_on.add(w)
+
+        if isinstance(w, ModOutput) and not transitive:
+            continue
+
+        if (wire is not w) and isinstance(w, ModOutput):
             # If we're at a ModOutput and it's not the original wire we're checking
             # backward reachability for, then jump over the module and just get the
             # requires_set.
@@ -260,5 +265,4 @@ def _backward_combinational_reachability(wire, transitive=False, block=None):
                     print(f"Warning: {w} not in src_dict")
             else:
                 tocheck.update(set(src_dict[w].args))
-        depends_on.add(w)
     return depends_on
