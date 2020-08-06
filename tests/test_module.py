@@ -405,6 +405,24 @@ class TestBasicModule(unittest.TestCase):
             m.to_output(w)
         self.assertEqual(str(ex.exception), "Cannot promote a wire to a module output outside of a module's definition")
 
+    def test_strict_sizing_from_outside(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            def definition(self):
+                a = self.Input(8, 'a', strict=True)
+                b = self.Output(8, 'b')
+                b <<= a
+
+        m = M()
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            w = pyrtl.WireVector(7, 'w')
+            m['a'] <<= w
+        self.assertEqual(str(ex.exception),
+            f"Length of module input {str(m['a'])} != length of {str(w)}, "
+             "and this module input has strict sizing set to True")
+
 class TestModuleImport(unittest.TestCase):
 
     def setUp(self):

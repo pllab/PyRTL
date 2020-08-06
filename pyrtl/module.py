@@ -11,8 +11,8 @@ class Module(ABC):
     def definition(self, *args):
         pass
 
-    def Input(self, bitwidth, name, sort=None):
-        wv = ModInput(bitwidth, name, self, sort)
+    def Input(self, bitwidth, name, sort=None, strict=False):
+        wv = ModInput(bitwidth, name, self, sort, strict)
         self.input_dict[name] = wv
         return wv
 
@@ -180,11 +180,12 @@ class ModIOWire(WireVector):
 
 class ModInput(ModIOWire):
 
-    def __init__(self, bitwidth: int, name: str, module: Module, sort=None):
+    def __init__(self, bitwidth: int, name: str, module: Module, sort=None, strict=False):
         if sort and sort not in (Free, Needed):
             raise PyrtlError(f"Invalid sort ascription for input {name} "
                 "(must provide either Free or Needed)")
         self.sort = sort
+        self.strict = strict
         super().__init__(bitwidth, name, module)
     
     def __ilshift__(self, other):
@@ -192,6 +193,16 @@ class ModInput(ModIOWire):
         if self.module.in_definition:
             raise PyrtlError(f"Invalid module. Module input {str(self)} cannot "
                               "be used on the lhs of <<= while within a module definition.")
+        # Note that OtherModule(ModInput) <<= self is permitted to allow for nested modules,
+        # because when that enters this method, OtherMoudle.in_definition will be False
+
+        if len(self) != len(other):
+            if self.strict:
+                raise PyrtlError(f"Length of module input {str(self)} != length of {str(other)}, "
+                    "and this module input has strict sizing set to True")
+            # else:
+            #     print(f"Warning: length of module input {str(self)} != length of {str(other)}. "
+            #         "PyRTL will automatically match their sizes, so make sure you meant this.")
 
         # We could have other be a ModOutput from another module,
         # or a ModInput from a surrounding module (i.e. self is the nested module).
