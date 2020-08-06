@@ -26,6 +26,26 @@ class Module(ABC):
 
     def outputs(self):
         return set(self.output_dict.values())
+    
+    def to_input(self, wire, name=""):
+        """ Promote a wire to be a module's input """
+        if not self.in_definition:
+            raise PyrtlError("Cannot promote a wire to a module input outside of a module's definition")
+        if not name:
+            if wire.name.startswith("tmp"):
+                raise PyrtlError(f"Trying to use the internal name of a wire ({wire.name}). "
+                    "Either explicitly name the wire, or pass in a non-empty name to this method.")
+        return self._to_mod_input(wire, name=name)
+
+    def to_output(self, wire, name=""):
+        """ Promote a wire to be a module's output """
+        if not self.in_definition:
+            raise PyrtlError("Cannot promote a wire to a module output outside of a module's definition")
+        if not name:
+            if wire.name.startswith("tmp"):
+                raise PyrtlError(f"Trying to use the internal name of a wire ({wire.name}). "
+                    "Either explicitly name the wire, or pass in a non-empty name to this method.")
+        return self._to_mod_output(wire, name=name)
 
     def to_pyrtl_io(self):
         """ Sets this modules' input/output wires as the
@@ -90,21 +110,31 @@ class Module(ABC):
         for wire in self.output_dict.values():
             s += f"    {wire.original_name, str(wire.sort)}\n"
         return s
+
+    def _to_mod_input(self, wire, name=None):
+        name = name if name else wire.name
+        new_wire = ModInput(len(wire), name=name, module=self)
+        self.input_dict[name] = new_wire
+        replace_wire(wire, new_wire, new_wire, self.block)
+        self.block.add_wirevector(new_wire)
+        return new_wire
+    
+    def _to_mod_output(self, wire, name=None):
+        name = name if name else wire.name
+        new_wire = ModOutput(len(wire), name=name, module=self)
+        self.output_dict[name] = new_wire
+        replace_wire(wire, new_wire, new_wire, self.block)
+        self.block.add_wirevector(new_wire)
+        return new_wire
     
     def _to_module_io(self, wire):
         if not isinstance(wire, (Input, Output)):
             raise PyrtlError("Can only convert PyRTL Input/Output "
                 "wirevectors into module input/output")
         if isinstance(wire, Input):
-            new_wire = ModInput(len(wire), name=wire.name, module=self)
-            self.input_dict[wire.name] = new_wire
+            return self._to_mod_input(wire)
         elif isinstance(wire, Output):
-            new_wire = ModOutput(len(wire), name=wire.name, module=self)
-            self.output_dict[wire.name] = new_wire
-
-        replace_wire(wire, new_wire, new_wire, self.block)
-        self.block.add_wirevector(new_wire)
-        return new_wire
+            return self._to_mod_output(wire)
 
 def module_from_block(block: Block = None):
     block = working_block(block)

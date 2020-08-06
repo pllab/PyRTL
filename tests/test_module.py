@@ -340,6 +340,71 @@ class TestBasicModule(unittest.TestCase):
         sim = pyrtl.Simulation()
         sim.step_multiple(inputs, outputs)
 
+    def test_wire_to_io_inside_module_good(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            def definition(self):
+                instr = self.Input(32, 'instr')
+                funct7, rs2, rs1, funct3, rd, opcode = pyrtl.chop(instr, 7, 5, 5, 3, 5, 7)
+                self.to_output(funct7, 'funct7')
+                self.to_output(rs2, 'rs2')
+                self.to_output(rs1, 'rs1')
+                self.to_output(funct3, 'funct3')
+                self.to_output(rd, 'rd')
+                self.to_output(opcode, 'opcode')
+        m = M()
+        self.assertEqual(m.inputs(), {m['instr']})
+        self.assertEqual(m.outputs(), {
+            m['funct7'], m['rs2'], m['rs1'],
+            m['funct3'], m['rd'], m['opcode']
+        })
+
+    def test_wire_to_io_inside_module_bad1(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            def definition(self):
+                w = pyrtl.WireVector(4)
+                self.to_output(w)
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            M()
+        self.assertTrue(str(ex.exception).startswith("Trying to use the internal name of a wire"))
+
+    def test_wire_to_io_inside_module_bad2(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            def definition(self):
+                w = pyrtl.WireVector(4)
+                self.to_input(w)
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            M()
+        self.assertTrue(str(ex.exception).startswith("Trying to use the internal name of a wire"))
+
+    def test_wire_to_io_outside_module_bad(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            def definition(self):
+                a = self.Input(8, 'a')
+                b = self.Output(8, 'b')
+                b <<= a
+
+        m = M()
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            w = pyrtl.WireVector(8, 'w')
+            m.to_input(w)
+        self.assertEqual(str(ex.exception), "Cannot promote a wire to a module input outside of a module's definition")
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            w = pyrtl.WireVector(8, 'w')
+            m.to_output(w)
+        self.assertEqual(str(ex.exception), "Cannot promote a wire to a module output outside of a module's definition")
+
 class TestModuleImport(unittest.TestCase):
 
     def setUp(self):
