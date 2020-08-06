@@ -174,9 +174,17 @@ class ModIOWire(WireVector):
     def __str__(self):
         return ''.join([self.original_name, '/', str(self.bitwidth), self._code])
 
-    @abstractmethod
-    def externally_connected(self) -> bool:
-        pass
+    def is_driven(self):
+        """ Check if this wire is being driven by another (i.e. self <<= other) """
+        src_dict, _ = self.module.block.net_connections()
+        # i.e. does this wire have any "sources" used to make it, meaning are there nets where it is a dest?
+        return self in src_dict
+
+    def is_driving(self):
+        """ Check if this wire is driving any other wire (i.e. other <<= self) """
+        _, dst_dict = self.module.block.net_connections()
+        # i.e. does this wire have any "destinations", meaning are there nets where it is a source?
+        return self in dst_dict
 
 class ModInput(ModIOWire):
 
@@ -203,6 +211,9 @@ class ModInput(ModIOWire):
             # else:
             #     print(f"Warning: length of module input {str(self)} != length of {str(other)}. "
             #         "PyRTL will automatically match their sizes, so make sure you meant this.")
+        
+        if self.is_driven():
+            raise PyrtlError(f"Attempted to connect to already-connected module input {str(self)})")
 
         # We could have other be a ModOutput from another module,
         # or a ModInput from a surrounding module (i.e. self is the nested module).
@@ -227,11 +238,6 @@ class ModInput(ModIOWire):
         # Note that the original ModInput wire is still its parent module's internal information.
         # This may be useful to query different properties about the original wire.
         # _Don't_ return the new Input wire because we don't want anyone doing anything with it.
-    
-    def externally_connected(self):
-        """ Check if this Input wire is connected to any external (outside of module) wires """
-        src_dict, _ = self.module.block.net_connections()
-        return self in src_dict
 
 class ModOutput(ModIOWire):
 
@@ -254,6 +260,9 @@ class ModOutput(ModIOWire):
             raise PyrtlError(f"Invalid module. Module output {str(other)} cannot be "
                               "used on the rhs of <<= while within a module definition.")
 
+        if self.is_driven():
+            raise PyrtlError(f"Attempted to connect to already-connected module output {str(self)})")
+
         # The only way to have access to a module's **unconnected** ModOuput wire is
         # when we're within a module's definition, meaning there is nothing to check yet.
         return super().__ilshift__(other)
@@ -266,8 +275,3 @@ class ModOutput(ModIOWire):
         # Note that the original ModOutput wire is still its parent module's internal information.
         # This may be useful to query different properties about the original wire.
         # _Don't_ return the new Output wire because we don't want anyone doing anything with it.
-
-    def externally_connected(self):
-        """ Check if this Output wire is connected to any external (outside of module) wires """
-        _, dst_dict = self.module.block.net_connections()
-        return self in dst_dict

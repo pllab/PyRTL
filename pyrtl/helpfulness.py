@@ -179,7 +179,7 @@ def _forward_combinational_reachability(wire, transitive=False, block=None) -> S
     block = working_block(block)
 
     # dest_dict: the map from wire to the nets (plural) where that wire
-    # is a source (i.e. it helps us find the wires that this wire affects)
+    # is a source (i.e. it helps us find the wires that this wire affects, i.e. its "destinations")
     # i.e. for net in dest_dict[wire]:
     #        assert wire in net.args
     _, dest_dict = block.net_connections()
@@ -244,8 +244,8 @@ def _backward_combinational_reachability(wire, transitive=False, block=None):
     depends_on = set()
     tocheck = set()
 
-    # src_dict ix the map from wire to the net (singular) where that wire
-    # is a destination (i.e. it helps us find the wires used to make this wire)
+    # src_dict is the map from wire to the net (singular) where that wire
+    # is a destination (i.e. it helps us find the wires ("sources") used to make this wire)
     # i.e. assert src_dict[wire].dests[0] == wire
     src_dict, _ = block.net_connections()
     if wire in src_dict:

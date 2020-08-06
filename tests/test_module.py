@@ -8,7 +8,7 @@ class TestBasicModule(unittest.TestCase):
     def setUp(self):
         pyrtl.reset_working_block()
 
-    def test_not_externally_connected(self):
+    def test_not_externally_driven(self):
         class A(pyrtl.Module):
             def __init__(self):
                 super().__init__()
@@ -29,8 +29,8 @@ class TestBasicModule(unittest.TestCase):
                 d <<= w + b - 2
 
         a = A()
-        self.assertFalse(a['a'].externally_connected())
-        self.assertFalse(a['b'].externally_connected())
+        self.assertFalse(a['a'].is_driven())
+        self.assertFalse(a['b'].is_driven())
     
     def test_attempt_to_access_nonexistent_wire(self):
         class A(pyrtl.Module):
@@ -423,6 +423,41 @@ class TestBasicModule(unittest.TestCase):
             f"Length of module input {str(m['a'])} != length of {str(w)}, "
              "and this module input has strict sizing set to True")
 
+    def test_connect_to_input_twice_from_outside(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            def definition(self):
+                a = self.Input(8, 'a', strict=True)
+                b = self.Output(8, 'b')
+                b <<= a + 1
+
+        m = M()
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            w = pyrtl.WireVector(8, 'w')
+            y = pyrtl.WireVector(8, 'y')
+            m['a'] <<= w
+            m['a'] <<= y
+        self.assertEqual(str(ex.exception),
+            f"Attempted to connect to already-connected module input {str(m['a'])})")
+
+    def test_connect_to_output_twice_from_inside(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            def definition(self):
+                a = self.Input(8, 'a', strict=True)
+                b = self.Output(8, 'b')
+                b <<= a + 1
+                b <<= pyrtl.Const(4)
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            M()
+        self.assertTrue(str(ex.exception).startswith(
+            "Attempted to connect to already-connected module output"))
+
+
 class TestModuleImport(unittest.TestCase):
 
     def setUp(self):
@@ -449,10 +484,10 @@ class TestModuleImport(unittest.TestCase):
         self.assertTrue(isinstance(m['b'], pyrtl.module.ModInput))
         self.assertTrue(isinstance(m['c'], pyrtl.module.ModOutput))
         self.assertTrue(isinstance(m['d'], pyrtl.module.ModOutput))
-        self.assertFalse(m['a'].externally_connected())
-        self.assertFalse(m['b'].externally_connected())
-        self.assertFalse(m['c'].externally_connected())
-        self.assertFalse(m['d'].externally_connected())
+        self.assertFalse(m['a'].is_driven())
+        self.assertFalse(m['b'].is_driven())
+        self.assertFalse(m['c'].is_driving())
+        self.assertFalse(m['d'].is_driving())
 
         m.to_pyrtl_io()
         sim = pyrtl.Simulation()
