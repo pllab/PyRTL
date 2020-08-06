@@ -169,7 +169,7 @@ class WireVector(object):
             raise PyrtlError(f"Invalid module. Module output {str(other)} cannot be "
                               "used on the rhs of <<= while within a module definition.")
         if isinstance(other, ModInput) and not other.module.in_definition:
-            raise PyrtlError(f"Invalid module. Module output {str(other)} can only "
+            raise PyrtlError(f"Invalid module. Module input {str(other)} can only "
                              "be used on the rhs of <<= while within a module definition.")
 
         other = self._prepare_for_assignment(other)

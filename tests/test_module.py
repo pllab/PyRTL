@@ -164,7 +164,7 @@ class TestBasicModule(unittest.TestCase):
             w = pyrtl.WireVector(2)
             w <<= m['i']
         self.assertEqual(str(ex.exception),
-            "Invalid module. Module output i/2W can only "
+            "Invalid module. Module input i/2W can only "
             "be used on the rhs of <<= while within a module definition.")
 
     def test_bad_output_assignment_outside_module(self):

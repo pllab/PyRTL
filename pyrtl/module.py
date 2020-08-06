@@ -27,6 +27,8 @@ class Module(ABC):
     def outputs(self):
         return set(self.output_dict.values())
     
+    # TODO Problem if wire is a register...
+    # TODO Make sure this wire isn't being used on the LHS of something
     def to_input(self, wire, name=""):
         """ Promote a wire to be a module's input """
         if not self.in_definition:
@@ -37,6 +39,9 @@ class Module(ABC):
                     "Either explicitly name the wire, or pass in a non-empty name to this method.")
         return self._to_mod_input(wire, name=name)
 
+    # TODO Problem if wire is a register...
+    # TODO Make sure this wire isn't being used on the RHS (e.g. other <<= this) of something,
+    #      or allow it and make the necessary changes.
     def to_output(self, wire, name=""):
         """ Promote a wire to be a module's output """
         if not self.in_definition:
