@@ -8,6 +8,49 @@ class TestBasicModule(unittest.TestCase):
 
     def setUp(self):
         pyrtl.reset_working_block()
+    
+    def test_no_modules_instantiated(self):
+        class _A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                a = self.Input(3, 'a')
+                b = self.Output(3, 'b')
+                b <<= a
+        
+        self.assertEqual(pyrtl.working_block().modules, {})
+
+    def test_some_unnamed_modules_instantiated(self):
+        class A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                a = self.Input(3, 'a')
+                b = self.Output(3, 'b')
+                b <<= a
+        
+        a1 = A()
+        a2 = A()
+        for name in pyrtl.working_block().modules.keys():
+            self.assertTrue(name.startswith('mod_tmp_'))
+        self.assertEqual(set(pyrtl.working_block().modules.values()), {a1, a2})
+ 
+    def test_some_named_modules_instantiated(self):
+        class A(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name)
+
+            def definition(self):
+                a = self.Input(3, 'a')
+                b = self.Output(3, 'b')
+                b <<= a
+        
+        a1 = A('a1')
+        a2 = A('a2')
+        self.assertEqual(pyrtl.working_block().modules['a1'], a1)
+        self.assertEqual(pyrtl.working_block().modules['a2'], a2)
 
     def test_not_externally_driven(self):
         class A(pyrtl.Module):
@@ -338,6 +381,50 @@ class TestBasicModule(unittest.TestCase):
         outputs = {'o_foo': [11]}
         sim = pyrtl.Simulation()
         sim.step_multiple(inputs, outputs)
+
+    def _test_access_nested_module(self):
+        # TODO
+        class Inner(pyrtl.Module):
+            def __init__(self,name=""):
+                super().__init__(name)
+
+            def definition(self):
+                a = self.Input(2, 'a')
+                o = self.Output(5, 'o_counter')
+                o <<= a + 2 * 2
+
+        class Outer(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                x = self.Input(6, 'x')
+                y = self.Output(7, 'y')
+                i = Inner('inside_mod')
+                i.a <<= x
+                y <<= i.o_counter - 1
+
+        m = Outer()
+        # TODO Ideally we could access them like this, but
+        # that would require changing how inner modules are instantiated
+        # to be some type of call on the outer module's self reference,
+        # so there's a way to register the inner module.
+        # Or we could have the inner child module take in an optional
+        # parent object, with which it registers
+        # pyrtl.probe(m.inside_mod.a, 'a_probe')
+        pyrtl.probe(pyrtl.working_block().modules['inside_mod'].a, 'a_probe')
+        m.to_pyrtl_io()
+        sim = pyrtl.Simulation()
+        x_and_a_vals = [1, 4, 9, 11, 5]
+        sim.step_multiple({'x': x_and_a_vals}, {'a_probe': x_and_a_vals})
+
+    def _test_cannot_modify_accessed_nested_module(self):
+        # TODO
+        pass
+
+    def _test_probe_of_module_io(self):
+        # TODO
+        pass
 
     def test_wire_to_io_inside_module_good(self):
         class M(pyrtl.Module):

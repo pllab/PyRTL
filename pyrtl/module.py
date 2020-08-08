@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Set
-from .core import working_block, Block
+from .core import working_block, Block, _NameIndexer
 from .helpfulness import annotate_module, error_if_not_well_connected, Free, Needed, Giving, Dependent
 from .pyrtlexceptions import PyrtlError
 from .wire import WireVector, Input, Output
 from .transform import replace_wire
+
+_modIndexer = _NameIndexer("mod_tmp_")
 
 class Module(ABC):
     @abstractmethod
@@ -83,8 +85,9 @@ class Module(ABC):
     def __init__(self, name="", block=None):
         # If the user supplies a name to their module's initializer and wants to set it via `self.name=`,
         # we need them to pass it into this initializer too. Not sure how to enforce this...
-        self.name = name
+        self.name = name if name else _modIndexer.make_valid_string()
         self.block = block if block else working_block()
+        self.block._add_module(self) # Must be done before _definition() for checking certain internal well-connected properties
         self.input_dict = {}
         self.output_dict = {}
         self._definition() # Must be done before annotating the module's inputs/outputs for helpfulness

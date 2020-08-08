@@ -166,6 +166,54 @@ class TestHelpfulness(unittest.TestCase):
         self.assertEqual(m.c.sort.requires_set, {m.a, m.b})
         self.assertTrue(isinstance(m.d.sort, pyrtl.helpfulness.Giving))
         self.assertFalse(m.d.sort.requires_set)
+    
+    def test_direct_loop_inner_module(self):
+        class Inner(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                x = self.Input(2, 'x')
+                y = self.Output(2, 'y')
+                y <<= x + 1
+        
+        class Outer(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = Inner()
+                i.x <<= i.y
+        
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            Outer()
+            self.assertTrue(str(ex.exception).startswith("Connection error!"))
+
+    def test_indirect_loop_inner_module(self):
+        class Inner(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                x = self.Input(2, 'x')
+                y = self.Output(2, 'y')
+                y <<= x + 1
+        
+        class Outer(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = Inner()
+                w1 = pyrtl.WireVector(2)
+                w2 = pyrtl.WireVector(2)
+                w1 <<= i.y
+                i.x <<= w2
+                w2 <<= w1
+        
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            Outer()
+            self.assertTrue(str(ex.exception).startswith("Connection error!"))
 
     def test_nested_connection(self):
         class Inner(pyrtl.Module):

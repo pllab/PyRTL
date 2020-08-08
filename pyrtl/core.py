@@ -263,6 +263,7 @@ class Block(object):
         self.legal_ops = set('w~&|^n+-*<>=xcsrm@')  # set of legal OPS
         self.rtl_assert_dict = {}   # map from wirevectors -> exceptions, used by rtl_assert
         self.memblock_by_name = {}  # map from name->memblock, for easy access to memblock objs
+        self.modules = {}  # map from name->module
 
     def __str__(self):
         """String form has one LogicNet per line."""
@@ -308,6 +309,16 @@ class Block(object):
         """
         self.sanity_check_memblock(mem)
         self.memblock_by_name[mem.name] = mem
+    
+    def _add_module(self, module):
+        """ Registers a module to the block.
+        """
+        # TODO: don't allow duplicate module names at the same level (i.e. a nested
+        # module in two different modules can be given the same name...). To do
+        # would probably involve each module keeping track of its submodules, and
+        # the mapping from original name to actual PyRTL-tracked name, like we do
+        # for ModInput/ModOuputs.
+        self.modules[module.name] = module
 
     def get_memblock_by_name(self, name, strict=False):
         """ Get a reference to a memory stored in this block by name.
