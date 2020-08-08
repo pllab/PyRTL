@@ -1,4 +1,5 @@
 # pylint: disable=unbalanced-tuple-unpacking
+# pylint: disable=no-member
 import pyrtl
 import unittest
 import pyrtl
@@ -352,8 +353,8 @@ class TestBasicModule(unittest.TestCase):
                 self.to_output(rd, 'rd')
                 self.to_output(opcode, 'opcode')
         m = M()
-        self.assertEqual(m.inputs(), {m.instr})
-        self.assertEqual(m.outputs(), {
+        self.assertEqual(m.inputs, {m.instr})
+        self.assertEqual(m.outputs, {
             m.funct7, m.rs2, m.rs1,
             m.funct3, m.rd, m.opcode
         })

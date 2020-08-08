@@ -21,9 +21,11 @@ class Module(ABC):
         self.output_dict[name] = wv
         return wv
     
+    @property
     def inputs(self):
         return set(self.input_dict.values())
 
+    @property
     def outputs(self):
         return set(self.output_dict.values())
     
@@ -57,9 +59,9 @@ class Module(ABC):
             current block's input/output wires (normally
             only useful when running a simulation).
         """
-        for w in self.inputs():
+        for w in self.inputs:
             w.to_pyrtl_input()
-        for w in self.outputs():
+        for w in self.outputs:
             w.to_pyrtl_output()
 
     def _definition(self):
@@ -71,10 +73,10 @@ class Module(ABC):
         # Ensure that all ModInput and ModOutput wires
         # have been connected to some internal module logic
         src_dict, dest_dict = self.block.net_connections()
-        for wire in self.inputs():
+        for wire in self.inputs:
             if wire not in dest_dict:
                 raise PyrtlError(f"Invalid module. Input {str(wire)} is not connected to any internal module logic.")
-        for wire in self.outputs():
+        for wire in self.outputs:
             if wire not in src_dict:
                 raise PyrtlError(f"Invalid module. Output {str(wire)} is not connected to any internal module logic.")
 

@@ -123,7 +123,7 @@ def error_if_not_well_connected(from_wire, to_wire):
                             raise PyrtlError("Connection error!\n" f"{str(to_wire)} <<= {str(from_wire)}\n")
 
 def annotate_module(module):
-    for wire in module.inputs().union(module.outputs()):
+    for wire in module.inputs.union(module.outputs):
         sort = get_wire_sort(wire, module)
         # If wire.sort was ascribed, check it and report if not matching
         # We have the user provide the classname of the sort, rather
@@ -142,7 +142,7 @@ def get_wire_sort(wire, module):
         # Get its forward reachability (wires that 'wire' combinationally affects WITHIN this module)...
         forward = _forward_combinational_reachability(wire, module.block)
         # ... and then just filter for the module outputs that wire affects
-        affects = set(w for w in forward if w in module.outputs())
+        affects = set(w for w in forward if w in module.outputs)
         if affects:
             return Needed(wire, affects)
         return Free(wire)
@@ -150,7 +150,7 @@ def get_wire_sort(wire, module):
         # Get its backward reachbility (wires that 'wire' combinationally depends on WITHIN this module)...
         backward = _backward_combinational_reachability(wire, module.block)
         # ... and then jus tilfter for the module inputs it depends on
-        depends = set(w for w in backward if w in module.inputs())
+        depends = set(w for w in backward if w in module.inputs)
         if depends:
             return Dependent(wire, depends)
         return Giving(wire)
