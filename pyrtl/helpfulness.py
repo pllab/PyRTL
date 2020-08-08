@@ -123,7 +123,14 @@ def error_if_not_well_connected(from_wire, to_wire):
                             raise PyrtlError("Connection error!\n" f"{str(to_wire)} <<= {str(from_wire)}\n")
 
 def annotate_module(module):
+    if Verbose:
+        print("Annotating module...")
+        print(f"There are {len(module.inputs)} inputs and {len(module.outputs)} outputs.")
+
     for wire in module.inputs.union(module.outputs):
+        if Verbose:
+            print(f"Getting sort for wire {str(wire)}...", end='')
+
         sort = get_wire_sort(wire, module)
         # If wire.sort was ascribed, check it and report if not matching
         # We have the user provide the classname of the sort, rather
@@ -134,6 +141,9 @@ def annotate_module(module):
                 f"User provided {wire.sort.__name__}\n"
                 f"But computed {str(sort)}")
         wire.sort = sort
+
+        if Verbose:
+            print(f"{str(wire.sort)}")
 
 def get_wire_sort(wire, module):
     from .module import ModInput, ModOutput
@@ -211,10 +221,7 @@ def _forward_combinational_reachability(wire, transitive=False, block=None) -> S
                 tocheck.add(mod_output)
 
         elif not isinstance(w, (Output, Const, Register, MemBlock, RomBlock)):
-            if w not in dest_dict:
-                if Verbose:
-                    print(f"Warning: {w} not in dest_dict")
-            else:
+            if w in dest_dict:
                 for net in dest_dict[w]:
                     if net.dests:
                         tocheck.add(net.dests[0])
@@ -269,9 +276,6 @@ def _backward_combinational_reachability(wire, transitive=False, block=None):
                 tocheck.add(mod_input)
 
         elif not isinstance(w, (Input, Const, Register, MemBlock, RomBlock)):
-            if w not in src_dict:
-                if Verbose:
-                    print(f"Warning: {w} not in src_dict")
-            else:
+            if w in src_dict:
                 tocheck.update(set(src_dict[w].args))
     return depends_on
