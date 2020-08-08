@@ -30,7 +30,7 @@ class Module(ABC):
     # TODO Problem if wire is a register...
     # TODO Make sure this wire isn't being used on the LHS of something
     def to_input(self, wire, name=""):
-        """ Promote a wire to be a module's input """
+        """ (Experimental): Promote a wire to be a module's input """
         if not self.in_definition:
             raise PyrtlError("Cannot promote a wire to a module input outside of a module's definition")
         if not name:
@@ -43,7 +43,7 @@ class Module(ABC):
     # TODO Make sure this wire isn't being used on the RHS (e.g. other <<= this) of something,
     #      or allow it and make the necessary changes.
     def to_output(self, wire, name=""):
-        """ Promote a wire to be a module's output """
+        """ (Experimental): Promote a wire to be a module's output """
         if not self.in_definition:
             raise PyrtlError("Cannot promote a wire to a module output outside of a module's definition")
         if not name:
@@ -89,13 +89,13 @@ class Module(ABC):
         self._check_all_io_internally_connected() # Must be done before annotating module, because we rely on the module being connected internally
         annotate_module(self)
     
-    def __getitem__(self, wirename):
-        if wirename in self.input_dict:
-            return self.input_dict[wirename]
-        elif wirename in self.output_dict:
-            return self.output_dict[wirename]
+    def __getattr__(self, wirename):
+        if wirename in self.__dict__['input_dict']:
+            return self.__dict__['input_dict'][wirename]
+        elif wirename in self.__dict__['output_dict']:
+            return self.__dict__['output_dict'][wirename]
         else:
-            raise PyrtlError(
+            raise AttributeError(
                 f"Cannot get non-IO wirevector {wirename} from module.\n"
                 "Make sure you spelled the wire name correctly, "
                 "that you used 'self.Input' and 'self.Output' rather than "

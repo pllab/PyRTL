@@ -29,8 +29,8 @@ class TestBasicModule(unittest.TestCase):
                 d <<= w + b - 2
 
         a = A()
-        self.assertFalse(a['a'].is_driven())
-        self.assertFalse(a['b'].is_driven())
+        self.assertFalse(a.a.is_driven())
+        self.assertFalse(a.b.is_driven())
     
     def test_attempt_to_access_nonexistent_wire(self):
         class A(pyrtl.Module):
@@ -39,8 +39,8 @@ class TestBasicModule(unittest.TestCase):
             def definition(self):
                 pass
         a = A()
-        with self.assertRaises(pyrtl.PyrtlError) as ex:
-            _ = a['x']
+        with self.assertRaises(AttributeError) as ex:
+            _ = a.x
         self.assertEqual(str(ex.exception),
             f"Cannot get non-IO wirevector x from module.\n"
             "Make sure you spelled the wire name correctly, "
@@ -64,7 +64,7 @@ class TestBasicModule(unittest.TestCase):
                 c <<= a + 1
                 # Allowing 'd <<= c + b - 2' is treated as bad because we might
                 # not know c's requires_set before we need to check d.
-                # I think the non-determinism in iterating over sets woudl causes
+                # I think the non-determinism in iterating over sets would causes
                 # this to fault occassionally because the ModOutput it
                 # reaches doesn't have a 'sort' attribute yet.
                 d <<= c + b - 2
@@ -86,11 +86,9 @@ class TestBasicModule(unittest.TestCase):
                 o <<= i + 1
 
         m = M()
-        with self.assertRaises(AttributeError) as ex:
-            m['i'].to_pyrtl_input()
-        self.assertEqual(str(ex.exception),
-            "'M' object has no attribute 'input_dict'"
-        )
+        with self.assertRaises(KeyError) as ex:
+            m.i.to_pyrtl_input()
+        self.assertEqual(str(ex.exception), "'input_dict'")
 
     def test_bad_input_assignment_in_module(self):
         class M(pyrtl.Module):
@@ -162,7 +160,7 @@ class TestBasicModule(unittest.TestCase):
         m = M()
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             w = pyrtl.WireVector(2)
-            w <<= m['i']
+            w <<= m.i
         self.assertEqual(str(ex.exception),
             "Invalid module. Module input i/2W can only "
             "be used on the rhs of <<= while within a module definition.")
@@ -179,7 +177,7 @@ class TestBasicModule(unittest.TestCase):
         
         m = M()
         with self.assertRaises(pyrtl.PyrtlError) as ex:
-            m['o'] <<= 3
+            m.o <<= 3
         self.assertEqual(str(ex.exception),
             "Invalid module. Module output o/4W can only "
             "be used on the lhs of <<= while within a module definition.")
@@ -205,10 +203,10 @@ class TestBasicModule(unittest.TestCase):
 
         a = A()
         b = B()
-        b['i'] <<= a['o']
+        b.i <<= a.o
 
-        a["ain"].to_pyrtl_input()
-        b["bout"].to_pyrtl_output()
+        a.ain.to_pyrtl_input()
+        b.bout.to_pyrtl_output()
 
         inputs = {
             'ain': [11, 10, 9]
@@ -238,9 +236,9 @@ class TestBasicModule(unittest.TestCase):
         # what you would expect. It would be better if
         # .name was opaque/only used internally, and the user
         # only really saw the wire via __str__ calls.
-        self.assertEqual(m['i'].original_name, 'i')
-        self.assertEqual(m['j'].original_name, 'j')
-        self.assertEqual(m['o'].original_name, 'o')
+        self.assertEqual(m.i.original_name, 'i')
+        self.assertEqual(m.j.original_name, 'j')
+        self.assertEqual(m.o.original_name, 'o')
 
     def test_connect_duplicate_modules_bad(self):
         class M(pyrtl.Module):
@@ -254,10 +252,10 @@ class TestBasicModule(unittest.TestCase):
 
         m1 = M()
         m2 = M()
-        m1['i'].to_pyrtl_input()
-        m2['i'].to_pyrtl_input()
-        m1['o'].to_pyrtl_output()
-        m2['o'].to_pyrtl_output()
+        m1.i.to_pyrtl_input()
+        m2.i.to_pyrtl_input()
+        m1.o.to_pyrtl_output()
+        m2.o.to_pyrtl_output()
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             _ = pyrtl.Simulation()
         self.assertTrue(str(ex.exception).startswith(
@@ -275,10 +273,10 @@ class TestBasicModule(unittest.TestCase):
 
         m1 = M()
         m2 = M()
-        m1['i'].to_pyrtl_input('m1_i')
-        m2['i'].to_pyrtl_input('m2_i')
-        m1['o'].to_pyrtl_output('m1_o')
-        m2['o'].to_pyrtl_output('m2_o')
+        m1.i.to_pyrtl_input('m1_i')
+        m2.i.to_pyrtl_input('m2_i')
+        m1.o.to_pyrtl_output('m1_o')
+        m2.o.to_pyrtl_output('m2_o')
 
         sim = pyrtl.Simulation()
         inputs = {
@@ -321,19 +319,19 @@ class TestBasicModule(unittest.TestCase):
                 o = self.Output(7, 'o_foo')
                 b = B()
                 # Case: outer mod input to nested mod input
-                b['x'] <<= i
+                b.x <<= i
                 # Case: nested mod output to outer mod output
-                o <<= b['y']
+                o <<= b.y
 
         a = A()
         f = Nested()
 
-        f['i'] <<= a['o_counter']
+        f.i <<= a.o_counter
 
-        a['a'].to_pyrtl_input()
-        a['b'].to_pyrtl_input()
-        a['c'].to_pyrtl_input()
-        f['o_foo'].to_pyrtl_output()
+        a.a.to_pyrtl_input()
+        a.b.to_pyrtl_input()
+        a.c.to_pyrtl_input()
+        f.o_foo.to_pyrtl_output()
 
         inputs = {'a': [1], 'b': [2], 'c': [3]}
         outputs = {'o_foo': [11]}
@@ -354,10 +352,10 @@ class TestBasicModule(unittest.TestCase):
                 self.to_output(rd, 'rd')
                 self.to_output(opcode, 'opcode')
         m = M()
-        self.assertEqual(m.inputs(), {m['instr']})
+        self.assertEqual(m.inputs(), {m.instr})
         self.assertEqual(m.outputs(), {
-            m['funct7'], m['rs2'], m['rs1'],
-            m['funct3'], m['rd'], m['opcode']
+            m.funct7, m.rs2, m.rs1,
+            m.funct3, m.rd, m.opcode
         })
 
     def test_wire_to_io_inside_module_bad1(self):
@@ -418,9 +416,9 @@ class TestBasicModule(unittest.TestCase):
 
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             w = pyrtl.WireVector(7, 'w')
-            m['a'] <<= w
+            m.a <<= w
         self.assertEqual(str(ex.exception),
-            f"Length of module input {str(m['a'])} != length of {str(w)}, "
+            f"Length of module input {str(m.a)} != length of {str(w)}, "
              "and this module input has strict sizing set to True")
 
     def test_connect_to_input_twice_from_outside(self):
@@ -437,10 +435,10 @@ class TestBasicModule(unittest.TestCase):
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             w = pyrtl.WireVector(8, 'w')
             y = pyrtl.WireVector(8, 'y')
-            m['a'] <<= w
-            m['a'] <<= y
+            m.a <<= w
+            m.a <<= y
         self.assertEqual(str(ex.exception),
-            f"Attempted to connect to already-connected module input {str(m['a'])})")
+            f"Attempted to connect to already-connected module input {str(m.a)})")
 
     def test_connect_to_output_twice_from_inside(self):
         class M(pyrtl.Module):
@@ -476,18 +474,18 @@ class TestModuleImport(unittest.TestCase):
         d <<= r
 
         m = pyrtl.module_from_block()
-        self.assertEqual(m['a'].original_name, 'a')
-        self.assertEqual(m['b'].original_name, 'b')
-        self.assertEqual(m['c'].original_name, 'c')
-        self.assertEqual(m['d'].original_name, 'd')
-        self.assertTrue(isinstance(m['a'], pyrtl.module.ModInput))
-        self.assertTrue(isinstance(m['b'], pyrtl.module.ModInput))
-        self.assertTrue(isinstance(m['c'], pyrtl.module.ModOutput))
-        self.assertTrue(isinstance(m['d'], pyrtl.module.ModOutput))
-        self.assertFalse(m['a'].is_driven())
-        self.assertFalse(m['b'].is_driven())
-        self.assertFalse(m['c'].is_driving())
-        self.assertFalse(m['d'].is_driving())
+        self.assertEqual(m.a.original_name, 'a')
+        self.assertEqual(m.b.original_name, 'b')
+        self.assertEqual(m.c.original_name, 'c')
+        self.assertEqual(m.d.original_name, 'd')
+        self.assertTrue(isinstance(m.a, pyrtl.module.ModInput))
+        self.assertTrue(isinstance(m.b, pyrtl.module.ModInput))
+        self.assertTrue(isinstance(m.c, pyrtl.module.ModOutput))
+        self.assertTrue(isinstance(m.d, pyrtl.module.ModOutput))
+        self.assertFalse(m.a.is_driven())
+        self.assertFalse(m.b.is_driven())
+        self.assertFalse(m.c.is_driving())
+        self.assertFalse(m.d.is_driving())
 
         m.to_pyrtl_io()
         sim = pyrtl.Simulation()
