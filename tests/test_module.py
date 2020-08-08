@@ -405,13 +405,20 @@ class TestBasicModule(unittest.TestCase):
                 y <<= i.o_counter - 1
 
         m = Outer()
-        # TODO Ideally we could access them like this, but
-        # that would require changing how inner modules are instantiated
+        # TODO Ideally we could access them like "m.inside_mod.a".
+        # 1) That would require changing how inner modules are instantiated
         # to be some type of call on the outer module's self reference,
         # so there's a way to register the inner module.
-        # Or we could have the inner child module take in an optional
-        # parent object, with which it registers
-        # pyrtl.probe(m.inside_mod.a, 'a_probe')
+        # 2) Or we could have the inner child module take in an optional
+        # parent object, with which it registers, like "i = Inner('inside_mod', self)".
+        # That doesn't seem so bad, except it allows you to pass in some non-self
+        # object as the second argument, breaking the abstraction entirely.
+        # 3) Or we could set a flag that tells us the current surrounding module, if
+        # any, and use it to set a module's parent. This would need to take into
+        # account the further nestedness that is possible, so a stack that pushes/pops
+        # the current parent (kind of like conditional handling in PyRTL). This way
+        # would eliminate the need to call "self.Input", instead just calling "Input"
+        # (or rather "ModInput", since "Input" clashes with the already exisintg PyRTL class)
         pyrtl.probe(pyrtl.working_block().modules['inside_mod'].a, 'a_probe')
         m.to_pyrtl_io()
         sim = pyrtl.Simulation()
