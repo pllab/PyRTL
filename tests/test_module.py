@@ -382,6 +382,27 @@ class TestBasicModule(unittest.TestCase):
         sim = pyrtl.Simulation()
         sim.step_multiple(inputs, outputs)
 
+    def test_no_modification_outside_definition(self):
+        class A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                a = self.Input(3, 'a')
+                b = self.Output(3, 'b')
+                b <<= a
+
+        a = A()
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            _c = a.Input(5, 'c')
+        self.assertEqual(str(ex.exception),
+            "Cannot create a module input outside of its definition")
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            _c = a.Output(5, 'c')
+        self.assertEqual(str(ex.exception),
+            "Cannot create a module output outside of its definition")
+
     def _test_access_nested_module(self):
         # TODO
         class Inner(pyrtl.Module):

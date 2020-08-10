@@ -14,11 +14,15 @@ class Module(ABC):
         pass
 
     def Input(self, bitwidth, name, sort=None, strict=False):
+        if not self.in_definition:
+            raise PyrtlError("Cannot create a module input outside of its definition")
         wv = ModInput(bitwidth, name, self, sort, strict)
         self.input_dict[name] = wv
         return wv
 
     def Output(self, bitwidth, name, sort=None):
+        if not self.in_definition:
+            raise PyrtlError("Cannot create a module output outside of its definition")
         wv = ModOutput(bitwidth, name, self, sort)
         self.output_dict[name] = wv
         return wv
