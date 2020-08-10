@@ -104,12 +104,15 @@ class Module(ABC):
         elif wirename in self.__dict__['output_dict']:
             return self.__dict__['output_dict'][wirename]
         else:
+            input_list = ', '.join(f"'{wire.original_name}'" for wire in self.inputs)
+            output_list = ', '.join(f"'{wire.original_name}'" for wire in self.outputs)
             raise AttributeError(
-                f"Cannot get non-IO wirevector {wirename} from module.\n"
+                f"Cannot get non-IO wirevector '{wirename}' from module.\n"
                 "Make sure you spelled the wire name correctly, "
                 "that you used 'self.Input' and 'self.Output' rather than "
                 "'pyrtl.Input' and 'pyrtl.Output' to declare the IO wirevectors, "
-                "and that you are accessing them from the correct module.")
+                "and that you are accessing them from the correct module.\n"
+                f"Available input wires are {input_list} and output wires are {output_list}.")
     
     def __setitem__(self, key, value):
         pass
@@ -118,10 +121,10 @@ class Module(ABC):
         s = ""
         s += f"Module '{self.__class__.__name__}'\n"
         s += f"  Inputs:\n"
-        for wire in self.input_dict.values():
+        for wire in self.inputs:
             s += f"    {wire.original_name, str(wire.sort)}\n"
         s += f"  Outputs:\n"
-        for wire in self.output_dict.values():
+        for wire in self.outputs:
             s += f"    {wire.original_name, str(wire.sort)}\n"
         return s
 

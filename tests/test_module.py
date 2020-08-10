@@ -85,13 +85,13 @@ class TestBasicModule(unittest.TestCase):
         a = A()
         with self.assertRaises(AttributeError) as ex:
             _ = a.x
-        self.assertEqual(str(ex.exception),
-            f"Cannot get non-IO wirevector x from module.\n"
+        self.assertTrue(str(ex.exception).startswith(
+            f"Cannot get non-IO wirevector 'x' from module.\n"
             "Make sure you spelled the wire name correctly, "
             "that you used 'self.Input' and 'self.Output' rather than "
             "'pyrtl.Input' and 'pyrtl.Output' to declare the IO wirevectors, "
             "and that you are accessing them from the correct module."
-        )
+        ))
 
     # TODO I don't have this check actually happening yet,
     # so for, just don't do the bad thing.
