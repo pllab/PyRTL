@@ -345,6 +345,39 @@ class TestHelpfulness(unittest.TestCase):
         self.assertTrue(isinstance(o.o_foo.sort, pyrtl.helpfulness.Dependent))
         self.assertEqual(o.o_foo.sort.requires_set, {o.j})
 
+    def test_simple_async_reg_file(self):
+        class RegisterFile(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                readreg = self.Input(5, 'readreg')
+                writereg = self.Input(5, 'writereg')
+                writedata = self.Input(32, 'writedata')
+                wen = self.Input(1, 'wen')
+
+                readdata = self.Output(32, 'readdata')
+
+                # Read async, write sync
+                rf = pyrtl.MemBlock(bitwidth=32, addrwidth=32, asynchronous=True, name="rf")
+                readdata <<= rf[readreg]
+                rf[writereg] <<= pyrtl.MemBlock.EnabledWrite(writedata, wen & (writereg != 0))
+
+        # TODO This will probably need to change when if I update how memory blocks
+        # are handled in the helpfulness annotator.
+        rf = RegisterFile()
+        self.assertTrue(isinstance(rf.readreg.sort, pyrtl.helpfulness.Needed))
+        self.assertEqual(rf.readreg.sort.awaited_by_set, {rf.readdata})
+        self.assertTrue(isinstance(rf.writereg.sort, pyrtl.helpfulness.Free))
+        self.assertFalse(rf.writereg.sort.awaited_by_set)
+        self.assertTrue(isinstance(rf.writedata.sort, pyrtl.helpfulness.Free))
+        self.assertFalse(rf.writedata.sort.awaited_by_set)
+        self.assertTrue(isinstance(rf.wen.sort, pyrtl.helpfulness.Free))
+        self.assertFalse(rf.wen.sort.awaited_by_set)
+
+        self.assertTrue(isinstance(rf.readdata.sort, pyrtl.helpfulness.Dependent))
+        self.assertEqual(rf.readdata.sort.requires_set, {rf.readreg})
+
     def test_outputs_to_multiple_connections(self):
         class M(pyrtl.Module):
             def __init__(self, name=""):
