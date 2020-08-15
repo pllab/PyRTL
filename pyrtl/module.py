@@ -171,7 +171,10 @@ def module_from_block(block: Block = None):
 class ModIOWire(WireVector):
 
     def __init__(self, bitwidth: int, name: str, module: Module):
+        if not module:
+            raise PyrtlError("Must supply a non-null module to a ModIOWire's constructor")
         self.module = module
+
         if not name:
             # Check this here because technically these are WireVectors, which accept
             # zero-length names, and we need a way to look them up later.

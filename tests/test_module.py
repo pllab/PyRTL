@@ -21,6 +21,19 @@ class TestBasicModule(unittest.TestCase):
         
         self.assertEqual(pyrtl.working_block().modules, {})
 
+    def test_empty_name_module_io(self):
+
+        class A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                _a = self.Input(3, name='')
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            A()
+        self.assertEqual(str(ex.exception), "Must supply a non-empty name for a module's input/output wire")
+
     def test_some_unnamed_modules_instantiated(self):
         class A(pyrtl.Module):
             def __init__(self):
