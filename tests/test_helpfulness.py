@@ -411,15 +411,15 @@ class TestHelpfulness(unittest.TestCase):
         m = M()
         w1 = pyrtl.WireVector(4)
         self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w1)
-            if isinstance(w, pyrtl.module.ModInput)), set())
+            if isinstance(w, pyrtl.module._ModInput)), set())
         w2 = w1 * 2
         self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w2)
-            if isinstance(w, pyrtl.module.ModInput)), set())
+            if isinstance(w, pyrtl.module._ModInput)), set())
         m.a <<= w2
         self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w1)
-            if isinstance(w, pyrtl.module.ModInput)), {m.a})
+            if isinstance(w, pyrtl.module._ModInput)), {m.a})
         self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w2)
-            if isinstance(w, pyrtl.module.ModInput)), {m.a})
+            if isinstance(w, pyrtl.module._ModInput)), {m.a})
 
     def test_is_wire_connected_to_inputs_transitive(self):
         class L(pyrtl.Module):
@@ -441,11 +441,11 @@ class TestHelpfulness(unittest.TestCase):
         w2 = l.c * 2
         m.a <<= w2
         self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w1, transitive=True)
-            if isinstance(w, pyrtl.module.ModInput)), {l.a, m.a})
+            if isinstance(w, pyrtl.module._ModInput)), {l.a, m.a})
         self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w1)
-            if isinstance(w, pyrtl.module.ModInput)), {l.a})
+            if isinstance(w, pyrtl.module._ModInput)), {l.a})
         self.assertEqual(set(w for w in pyrtl.helpfulness._forward_combinational_reachability(w2)
-            if isinstance(w, pyrtl.module.ModInput)), {m.a})
+            if isinstance(w, pyrtl.module._ModInput)), {m.a})
 
     def test_is_wire_connected_to_outputs_transitive(self):
         class L(pyrtl.Module):
@@ -467,9 +467,9 @@ class TestHelpfulness(unittest.TestCase):
         w2 = l.c * 2
         w1 <<= m.b
         self.assertEqual(set(w for w in pyrtl.helpfulness._backward_combinational_reachability(w2, transitive=True)
-            if isinstance(w, pyrtl.module.ModOutput)), {l.c, m.b})
+            if isinstance(w, pyrtl.module._ModOutput)), {l.c, m.b})
         self.assertEqual(set(w for w in pyrtl.helpfulness._backward_combinational_reachability(w2)
-            if isinstance(w, pyrtl.module.ModOutput)), {l.c})
+            if isinstance(w, pyrtl.module._ModOutput)), {l.c})
     
     def test_good_sort_ascriptions(self):
         class L(pyrtl.Module):

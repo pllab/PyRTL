@@ -16,14 +16,14 @@ class Module(ABC):
     def Input(self, bitwidth, name, sort=None, strict=False):
         if not self.in_definition:
             raise PyrtlError("Cannot create a module input outside of its definition")
-        wv = ModInput(bitwidth, name, self, sort, strict)
+        wv = _ModInput(bitwidth, name, self, sort, strict)
         self.input_dict[name] = wv
         return wv
 
     def Output(self, bitwidth, name, sort=None):
         if not self.in_definition:
             raise PyrtlError("Cannot create a module output outside of its definition")
-        wv = ModOutput(bitwidth, name, self, sort)
+        wv = _ModOutput(bitwidth, name, self, sort)
         self.output_dict[name] = wv
         return wv
     
@@ -76,7 +76,7 @@ class Module(ABC):
         self.in_definition = False
     
     def _check_all_io_internally_connected(self):
-        # Ensure that all ModInput and ModOutput wires
+        # Ensure that all _ModInput and _ModOutput wires
         # have been connected to some internal module logic
         src_dict, dest_dict = self.block.net_connections()
         for wire in self.inputs:
@@ -104,8 +104,8 @@ class Module(ABC):
         elif wirename in self.__dict__['output_dict']:
             return self.__dict__['output_dict'][wirename]
         else:
-            input_list = ', '.join(f"'{wire.original_name}'" for wire in self.inputs)
-            output_list = ', '.join(f"'{wire.original_name}'" for wire in self.outputs)
+            input_list = ', '.join(f"'{wire._original_name}'" for wire in self.inputs)
+            output_list = ', '.join(f"'{wire._original_name}'" for wire in self.outputs)
             raise AttributeError(
                 f"Cannot get non-IO wirevector '{wirename}' from module.\n"
                 "Make sure you spelled the wire name correctly, "
@@ -122,15 +122,15 @@ class Module(ABC):
         s += f"Module '{self.__class__.__name__}'\n"
         s += f"  Inputs:\n"
         for wire in self.inputs:
-            s += f"    {wire.original_name, str(wire.sort)}\n"
+            s += f"    {wire._original_name, str(wire.sort)}\n"
         s += f"  Outputs:\n"
         for wire in self.outputs:
-            s += f"    {wire.original_name, str(wire.sort)}\n"
+            s += f"    {wire._original_name, str(wire.sort)}\n"
         return s
 
     def _to_mod_input(self, wire, name=None):
         name = name if name else wire.name
-        new_wire = ModInput(len(wire), name=name, module=self)
+        new_wire = _ModInput(len(wire), name=name, module=self)
         self.input_dict[name] = new_wire
         replace_wire(wire, new_wire, new_wire, self.block)
         self.block.add_wirevector(new_wire)
@@ -138,7 +138,7 @@ class Module(ABC):
     
     def _to_mod_output(self, wire, name=None):
         name = name if name else wire.name
-        new_wire = ModOutput(len(wire), name=name, module=self)
+        new_wire = _ModOutput(len(wire), name=name, module=self)
         self.output_dict[name] = new_wire
         replace_wire(wire, new_wire, new_wire, self.block)
         self.block.add_wirevector(new_wire)
@@ -180,11 +180,11 @@ class ModIOWire(WireVector):
         # constructor so that a fresh temporary name is produced. This allows
         # two modules to be instantiated with same-named I/O wires without the
         # second overwriting the first.
-        self.original_name = name
+        self._original_name = name
         super().__init__(bitwidth=bitwidth, name="", block=module.block)
 
     def __str__(self):
-        return ''.join([self.original_name, '/', str(self.bitwidth), self._code])
+        return ''.join([self._original_name, '/', str(self.bitwidth), self._code])
 
     def is_driven(self):
         """ Check if this wire is being driven by another (i.e. self <<= other) """
@@ -198,7 +198,7 @@ class ModIOWire(WireVector):
         # i.e. does this wire have any "destinations", meaning are there nets where it is a source?
         return self in dst_dict
 
-class ModInput(ModIOWire):
+class _ModInput(ModIOWire):
 
     def __init__(self, bitwidth: int, name: str, module: Module, sort=None, strict=False):
         if sort and sort not in (Free, Needed):
@@ -209,11 +209,11 @@ class ModInput(ModIOWire):
         super().__init__(bitwidth, name, module)
     
     def __ilshift__(self, other):
-        """ self(ModInput) <<= other """
+        """ self(_ModInput) <<= other """
         if self.module.in_definition:
             raise PyrtlError(f"Invalid module. Module input {str(self)} cannot "
                               "be used on the lhs of <<= while within a module definition.")
-        # Note that OtherModule(ModInput) <<= self is permitted to allow for nested modules,
+        # Note that OtherModule(_ModInput) <<= self is permitted to allow for nested modules,
         # because when that enters this method, OtherMoudle.in_definition will be False
 
         if len(self) != len(other):
@@ -227,31 +227,31 @@ class ModInput(ModIOWire):
         if self.is_driven():
             raise PyrtlError(f"Attempted to connect to already-connected module input {str(self)})")
 
-        # We could have other be a ModOutput from another module,
-        # or a ModInput from a surrounding module (i.e. self is the nested module).
-        # The "nested" case is always going to be outer ModInput to nested ModInput,
-        # or nested ModOutput to outer ModOutput, and we actually don't need to check
-        # these (proof should be following in the paper). Just check ModInput <<= ModOutput.
+        # We could have other be a _ModOutput from another module,
+        # or a _ModInput from a surrounding module (i.e. self is the nested module).
+        # The "nested" case is always going to be outer _ModInput to nested _ModInput,
+        # or nested _ModOutput to outer _ModOutput, and we actually don't need to check
+        # these (proof should be following in the paper). Just check _ModInput <<= _ModOutput.
         # Actually, we need to check this in any case, because we could have the case where
-        # w = ModOutput * 3
-        # ModInput <<= w
+        # w = _ModOutput * 3
+        # _ModInput <<= w
         # meaning having an intermediate connection. Not a big deal, since the checking
-        # will only traverse all the wires up to the nearest ModOutput, after which time
+        # will only traverse all the wires up to the nearest _ModOutput, after which time
         # it will skip over modules by just considering their requires/await sets
         error_if_not_well_connected(other, self)
         super().__ilshift__(other)
         return self
     
     def to_pyrtl_input(self, name=""):
-        name = name if name else self.original_name
+        name = name if name else self._original_name
         w = Input(len(self), name=name, block=self.module.block)
         replace_wire(self, w, w, self.module.block)
         self.module.block.add_wirevector(w)
-        # Note that the original ModInput wire is still its parent module's internal information.
+        # Note that the original _ModInput wire is still its parent module's internal information.
         # This may be useful to query different properties about the original wire.
         # _Don't_ return the new Input wire because we don't want anyone doing anything with it.
 
-class ModOutput(ModIOWire):
+class _ModOutput(ModIOWire):
 
     def __init__(self, bitwidth: int, name: str, module: Module, sort=None):
         if sort and sort not in (Giving, Dependent):
@@ -261,12 +261,12 @@ class ModOutput(ModIOWire):
         super().__init__(bitwidth, name, module)
 
     def __ilshift__(self, other):
-        """ self(ModOutput) <<= other """
+        """ self(_ModOutput) <<= other """
         if not self.module.in_definition:
             raise PyrtlError(f"Invalid module. Module output {str(self)} can only "
                               "be used on the lhs of <<= while within a module definition.")
 
-        if isinstance(other, ModOutput) and self.module == other.module:
+        if isinstance(other, _ModOutput) and self.module == other.module:
             # Check for equivalent modules because it's okay if it's a connection
             # from an outer module to a nested module.
             raise PyrtlError(f"Invalid module. Module output {str(other)} cannot be "
@@ -280,10 +280,10 @@ class ModOutput(ModIOWire):
         return super().__ilshift__(other)
 
     def to_pyrtl_output(self, name=""):
-        name = name if name else self.original_name
+        name = name if name else self._original_name
         w = Output(len(self), name=name, block=self.module.block)
         replace_wire(self, w, w, self.module.block)
         self.module.block.add_wirevector(w)
-        # Note that the original ModOutput wire is still its parent module's internal information.
+        # Note that the original _ModOutput wire is still its parent module's internal information.
         # This may be useful to query different properties about the original wire.
         # _Don't_ return the new Output wire because we don't want anyone doing anything with it.

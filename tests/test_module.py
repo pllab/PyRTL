@@ -68,7 +68,7 @@ class TestBasicModule(unittest.TestCase):
                 # requires_set before we need to check d, so maybe disallow
                 # outputs to be arguments to a net (like is done in overall pyrtl).
                 # I think the non-determinism in iterating over sets causes this to
-                # fault occassionally because the ModOutput it reaches doesn't have
+                # fault occassionally because the _ModOutput it reaches doesn't have
                 # a 'sort' attribute yet.
                 d <<= w + b - 2
 
@@ -109,7 +109,7 @@ class TestBasicModule(unittest.TestCase):
                 # Allowing 'd <<= c + b - 2' is treated as bad because we might
                 # not know c's requires_set before we need to check d.
                 # I think the non-determinism in iterating over sets would causes
-                # this to fault occassionally because the ModOutput it
+                # this to fault occassionally because the _ModOutput it
                 # reaches doesn't have a 'sort' attribute yet.
                 d <<= c + b - 2
 
@@ -275,14 +275,14 @@ class TestBasicModule(unittest.TestCase):
         
         m = M()
         # It's a little distasteful that the user-defined
-        # name is hidden behind .original_name, so that
+        # name is hidden behind ._original_name, so that
         # they when they write .name, it doesn't give
         # what you would expect. It would be better if
         # .name was opaque/only used internally, and the user
         # only really saw the wire via __str__ calls.
-        self.assertEqual(m.i.original_name, 'i')
-        self.assertEqual(m.j.original_name, 'j')
-        self.assertEqual(m.o.original_name, 'o')
+        self.assertEqual(m.i._original_name, 'i')
+        self.assertEqual(m.j._original_name, 'j')
+        self.assertEqual(m.o._original_name, 'o')
 
     def test_connect_duplicate_modules_bad(self):
         class M(pyrtl.Module):
@@ -439,7 +439,7 @@ class TestBasicModule(unittest.TestCase):
         # account the further nestedness that is possible, so a stack that pushes/pops
         # the current parent (kind of like conditional handling in PyRTL). This way
         # would eliminate the need to call "self.Input", instead just calling "Input"
-        # (or rather "ModInput", since "Input" clashes with the already exisintg PyRTL class)
+        # (or rather "_ModInput", since "Input" clashes with the already exisintg PyRTL class)
         pyrtl.probe(pyrtl.working_block().modules['inside_mod'].a, 'a_probe')
         m.to_pyrtl_io()
         sim = pyrtl.Simulation()
@@ -590,14 +590,14 @@ class TestModuleImport(unittest.TestCase):
         d <<= r
 
         m = pyrtl.module_from_block()
-        self.assertEqual(m.a.original_name, 'a')
-        self.assertEqual(m.b.original_name, 'b')
-        self.assertEqual(m.c.original_name, 'c')
-        self.assertEqual(m.d.original_name, 'd')
-        self.assertTrue(isinstance(m.a, pyrtl.module.ModInput))
-        self.assertTrue(isinstance(m.b, pyrtl.module.ModInput))
-        self.assertTrue(isinstance(m.c, pyrtl.module.ModOutput))
-        self.assertTrue(isinstance(m.d, pyrtl.module.ModOutput))
+        self.assertEqual(m.a._original_name, 'a')
+        self.assertEqual(m.b._original_name, 'b')
+        self.assertEqual(m.c._original_name, 'c')
+        self.assertEqual(m.d._original_name, 'd')
+        self.assertTrue(isinstance(m.a, pyrtl.module._ModInput))
+        self.assertTrue(isinstance(m.b, pyrtl.module._ModInput))
+        self.assertTrue(isinstance(m.c, pyrtl.module._ModOutput))
+        self.assertTrue(isinstance(m.d, pyrtl.module._ModOutput))
         self.assertFalse(m.a.is_driven())
         self.assertFalse(m.b.is_driven())
         self.assertFalse(m.c.is_driving())

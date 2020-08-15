@@ -28,12 +28,12 @@ class Free(InputSort):
 
 class Needed(InputSort):
     def __init__(self, wire, awaited_by_set):
-        from .module import ModOutput
+        from .module import _ModOutput
         self.wire = wire
         self.awaited_by_set = awaited_by_set
         # Sanity check
         for w in self.awaited_by_set:
-            assert(isinstance(w, ModOutput))
+            assert(isinstance(w, _ModOutput))
 
     def __str__(self):
         wns = ", ".join(map(str, self.awaited_by_set))
@@ -52,12 +52,12 @@ class Giving(OutputSort):
 
 class Dependent(OutputSort):
     def __init__(self, wire, requires_set):
-        from .module import ModInput
+        from .module import _ModInput
         self.wire = wire
         self.requires_set = requires_set
         # Sanity check
         for w in self.requires_set:
-            assert(isinstance(w, ModInput))
+            assert(isinstance(w, _ModInput))
 
     def __str__(self):
         wns = ", ".join(map(str, self.requires_set))
@@ -68,22 +68,22 @@ class Dependent(OutputSort):
 # - cache the results
 def error_if_not_well_connected(from_wire, to_wire):
     # NOTE: this assumes everythings is in the same working block.
-    from .module import ModInput, ModOutput
+    from .module import _ModInput, _ModOutput
         
-    if not isinstance(from_wire, ModOutput):
-        # get all the closest ModOutputs that combinationally connect to this regular wire
-        from_output_wires = set(w for w in _backward_combinational_reachability(from_wire) if isinstance(w, ModOutput))
+    if not isinstance(from_wire, _ModOutput):
+        # get all the closest _ModOutputs that combinationally connect to this regular wire
+        from_output_wires = set(w for w in _backward_combinational_reachability(from_wire) if isinstance(w, _ModOutput))
     else:
         from_output_wires = {from_wire}
 
-    if not isinstance(to_wire, ModInput):
-        # get all the closest ModInputs that this wire combinationally connects to
-        to_input_wires = set(w for w in _forward_combinational_reachability(to_wire) if isinstance(w, ModInput))
+    if not isinstance(to_wire, _ModInput):
+        # get all the closest _ModInputs that this wire combinationally connects to
+        to_input_wires = set(w for w in _forward_combinational_reachability(to_wire) if isinstance(w, _ModInput))
     else:
         to_input_wires = {to_wire}
     
     # Since we have a call in WireVector.__ilshift__ (i.e. connecting
-    # arbitrary wires), rather than just when connecting to known ModInputs,
+    # arbitrary wires), rather than just when connecting to known _ModInputs,
     # we need to make sure we're not inside a module definition.
     # This function only works when analyzing connections between modules
     # that have already been analyzed.
@@ -92,11 +92,11 @@ def error_if_not_well_connected(from_wire, to_wire):
             return
 
     for from_wire in from_output_wires:
-        assert isinstance(from_wire, ModOutput)
+        assert isinstance(from_wire, _ModOutput)
         assert isinstance(from_wire.sort, (Giving, Dependent))
 
         for to_wire in to_input_wires:
-            assert isinstance(to_wire, ModInput)
+            assert isinstance(to_wire, _ModInput)
             assert isinstance(to_wire.sort, (Free, Needed))
 
             # from_wire is from module 1
@@ -114,8 +114,8 @@ def error_if_not_well_connected(from_wire, to_wire):
                         f"{str(to_wire)} <<= {str(from_wire)}\n")
                 for required_wire in from_wire.sort.requires_set:
                     for awaiting_wire in to_wire.sort.awaited_by_set:
-                        assert isinstance(required_wire, ModInput)
-                        assert isinstance(awaiting_wire, ModOutput)
+                        assert isinstance(required_wire, _ModInput)
+                        assert isinstance(awaiting_wire, _ModOutput)
 
                         descendants = _forward_combinational_reachability(awaiting_wire, transitive=True)
                         descendants.add(awaiting_wire)
@@ -146,9 +146,9 @@ def annotate_module(module):
             print(f"{str(wire.sort)}")
 
 def get_wire_sort(wire, module):
-    from .module import ModInput, ModOutput
+    from .module import _ModInput, _ModOutput
 
-    if isinstance(wire, ModInput):
+    if isinstance(wire, _ModInput):
         # Get its forward reachability (wires that 'wire' combinationally affects WITHIN this module)...
         forward = _forward_combinational_reachability(wire, module.block)
         # ... and then just filter for the module outputs that wire affects
@@ -156,7 +156,7 @@ def get_wire_sort(wire, module):
         if affects:
             return Needed(wire, affects)
         return Free(wire)
-    elif isinstance(wire, ModOutput):
+    elif isinstance(wire, _ModOutput):
         # Get its backward reachbility (wires that 'wire' combinationally depends on WITHIN this module)...
         backward = _backward_combinational_reachability(wire, module.block)
         # ... and then jus tilfter for the module inputs it depends on
@@ -168,9 +168,9 @@ def get_wire_sort(wire, module):
         raise PyrtlError("Only get wire sorts of inputs/outputs")
 
 # For forward combinational reachability, if the wire we're checking
-# is a ModInput, then get all the wires it affects combinationally inside its module.
-# Otherwise, transitively go forward, and when you reach a ModInput,
-# continue with the ModOutput wires in that ModInput's awaited_by set
+# is a _ModInput, then get all the wires it affects combinationally inside its module.
+# Otherwise, transitively go forward, and when you reach a _ModInput,
+# continue with the _ModOutput wires in that _ModInput's awaited_by set
 # (which has already been computed once per other module),
 # so we don't descend into the module itself, theoretically saving time
 # by not having to navigate any modules' netlist.
@@ -182,7 +182,7 @@ def _forward_combinational_reachability(wire, transitive=False, block=None) -> S
 
         Handles if there are combinational loops
     """
-    from .module import ModInput 
+    from .module import _ModInput 
     if isinstance(wire, (Const, Register, MemBlock, RomBlock, Output)):
         return {wire}
     
@@ -210,11 +210,11 @@ def _forward_combinational_reachability(wire, transitive=False, block=None) -> S
 
         affects.add(w)
 
-        if isinstance(w, ModInput) and not transitive:
+        if isinstance(w, _ModInput) and not transitive:
             continue
 
-        if (wire is not w) and isinstance(w, ModInput):
-            # If we're at a ModInput and it's not the original wire we're checking
+        if (wire is not w) and isinstance(w, _ModInput):
+            # If we're at a _ModInput and it's not the original wire we're checking
             # forward reachability for, then jump over the module and just get the
             # awaited_by_set.
             for mod_output in w.sort.awaited_by_set:
@@ -228,9 +228,9 @@ def _forward_combinational_reachability(wire, transitive=False, block=None) -> S
     return affects
 
 # For backward combinational reachability, if the wire we're checking
-# is a ModOutput, then get all the wires it depends on combinationally inside its module.
-# Otherwise, transitively go backward, and when you reach a ModOutput,
-# continue with the ModInput wires in that ModOutput's depends set
+# is a _ModOutput, then get all the wires it depends on combinationally inside its module.
+# Otherwise, transitively go backward, and when you reach a _ModOutput,
+# continue with the _ModInput wires in that _ModOutput's depends set
 # (which has already been computed once per other module),
 # so we don't descend into the module itself, theoretically saving time
 # by not having to navigate any modules' netlist.
@@ -243,7 +243,7 @@ def _backward_combinational_reachability(wire, transitive=False, block=None):
         Handles if there are combinational loops
     """
 
-    from .module import ModOutput
+    from .module import _ModOutput
     if isinstance(wire, (Const, Register, MemBlock, RomBlock, Input)):
         return {wire}
     
@@ -265,11 +265,11 @@ def _backward_combinational_reachability(wire, transitive=False, block=None):
 
         depends_on.add(w)
 
-        if isinstance(w, ModOutput) and not transitive:
+        if isinstance(w, _ModOutput) and not transitive:
             continue
 
-        if (wire is not w) and isinstance(w, ModOutput):
-            # If we're at a ModOutput and it's not the original wire we're checking
+        if (wire is not w) and isinstance(w, _ModOutput):
+            # If we're at a _ModOutput and it's not the original wire we're checking
             # backward reachability for, then jump over the module and just get the
             # requires_set.
             for mod_input in w.sort.requires_set:
