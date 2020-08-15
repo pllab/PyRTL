@@ -204,9 +204,11 @@ class ModIOWire(WireVector):
 class _ModInput(ModIOWire):
 
     def __init__(self, bitwidth: int, name: str, module: Module, sort=None, strict=False):
-        if sort and sort not in (Free, Needed):
+        # sort can be the type, or an instance of the object with the awaited_by_set filled in
+        # with either actual modio objects, or their names (in the case of an ascription)
+        if sort and (sort not in (Free, Needed)) and (not isinstance(sort, (Free, Needed))):
             raise PyrtlError(f"Invalid sort ascription for input {name} "
-                "(must provide either Free or Needed)")
+                "(must provide either Free or Needed type name or instance)")
         self.sort = sort
         self.strict = strict
         super().__init__(bitwidth, name, module)
@@ -257,9 +259,11 @@ class _ModInput(ModIOWire):
 class _ModOutput(ModIOWire):
 
     def __init__(self, bitwidth: int, name: str, module: Module, sort=None):
-        if sort and sort not in (Giving, Dependent):
+        # sort can be the type, or an instance of the object with the requires_set filled in
+        # with either actual modio objects, or their names (in the case of an ascription)
+        if sort and (sort not in (Giving, Dependent)) and (not isinstance(sort, (Giving, Dependent))):
             raise PyrtlError(f"Invalid sort ascription for output {name} "
-                "(must provide either Giving or Dependent)")
+                "(must provide either Giving or Dependent type name or instance)")
         self.sort = sort
         super().__init__(bitwidth, name, module)
 

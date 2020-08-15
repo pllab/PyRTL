@@ -29,7 +29,7 @@ class TestBasicModule(unittest.TestCase):
 
             def definition(self):
                 _a = self.Input(3, name='')
-
+        
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             A()
         self.assertEqual(str(ex.exception), "Must supply a non-empty name for a module's input/output wire")

@@ -488,6 +488,23 @@ class TestHelpfulness(unittest.TestCase):
         
         L()
 
+    def test_good_sort_ascription_objects(self):
+        class L(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a', sort=pyrtl.helpfulness.Free)
+                b = self.Output(6, 'b', sort=pyrtl.helpfulness.Giving)
+                c = self.Input(2, 'c', sort=pyrtl.helpfulness.Needed({'d'}))
+                d = self.Output(2, 'd', sort=pyrtl.helpfulness.Dependent({'c'}))
+                r = pyrtl.Register(5, 'r')
+                r.next <<= a + 1
+                b <<= r * 4
+                d <<= c - 1
+        
+        L()
+
     def test_bad_sort_ascriptions(self):
         class L(pyrtl.Module):
             def __init__(self, name=""):
@@ -524,7 +541,7 @@ class TestHelpfulness(unittest.TestCase):
             L()
         self.assertEqual(str(ex.exception),
             ("Invalid sort ascription for input a "
-             "(must provide either Free or Needed)"))
+             "(must provide either Free or Needed type name or instance)"))
 
     def test_invalid_output_sort_ascription(self):
         class L(pyrtl.Module):
@@ -540,7 +557,7 @@ class TestHelpfulness(unittest.TestCase):
             L()
         self.assertEqual(str(ex.exception),
             ("Invalid sort ascription for output b "
-             "(must provide either Giving or Dependent)"))
+             "(must provide either Giving or Dependent type name or instance)"))
 
 if __name__ == '__main__':
     unittest.main()

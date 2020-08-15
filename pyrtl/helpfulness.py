@@ -15,11 +15,13 @@ from .memory import MemBlock, RomBlock
 
 Verbose = False
 
+# Allowing wire=None allows these to be used instantiated as ascriptions
+
 class InputSort(abc.ABC):
     pass
 
 class Free(InputSort):
-    def __init__(self, wire):
+    def __init__(self, wire=None):
         self.wire = wire
         self.awaited_by_set = set()
 
@@ -27,13 +29,15 @@ class Free(InputSort):
         return "Free"
 
 class Needed(InputSort):
-    def __init__(self, wire, awaited_by_set):
+    def __init__(self, awaited_by_set, wire=None, ascription=True):
         from .module import _ModOutput
         self.wire = wire
         self.awaited_by_set = awaited_by_set
+        self.ascription = ascription
         # Sanity check
-        for w in self.awaited_by_set:
-            assert(isinstance(w, _ModOutput))
+        if not self.ascription:
+            for w in self.awaited_by_set:
+                assert(isinstance(w, _ModOutput))
 
     def __str__(self):
         wns = ", ".join(map(str, self.awaited_by_set))
@@ -43,7 +47,7 @@ class OutputSort(abc.ABC):
     pass
 
 class Giving(OutputSort):
-    def __init__(self, wire):
+    def __init__(self, wire=None):
         self.wire = wire
         self.requires_set = set()
 
@@ -51,17 +55,41 @@ class Giving(OutputSort):
         return "Giving"
 
 class Dependent(OutputSort):
-    def __init__(self, wire, requires_set):
+    def __init__(self, requires_set, wire=None, ascription=True):
         from .module import _ModInput
         self.wire = wire
         self.requires_set = requires_set
+        self.ascription = ascription
         # Sanity check
-        for w in self.requires_set:
-            assert(isinstance(w, _ModInput))
+        if not self.ascription:
+            for w in self.requires_set:
+                assert(isinstance(w, _ModInput))
 
     def __str__(self):
         wns = ", ".join(map(str, self.requires_set))
         return f"Dependent (depends on: {wns})"
+
+def sort_matches(ascription, sort):
+    # User can just supply classname (e.g. sort=Needed) without specifying _what_
+    # the wire needs; that's fine, we just won't compare against the wires it needs.
+    if isinstance(ascription, type) and isinstance(sort, ascription):
+        return True
+
+    # Otherwise user supplied an instance of the InputSort/OutputSort class:
+    if isinstance(ascription, Free) and isinstance(sort, Free):
+        return True
+    if isinstance(ascription, Giving) and isinstance(sort, Giving):
+        return True
+    if isinstance(ascription, Needed) and isinstance(sort, Needed):
+        expected_names = ascription.awaited_by_set
+        actual_names = set({w._original_name for w in sort.awaited_by_set})
+        return expected_names == actual_names
+    if isinstance(ascription, Dependent) and isinstance(sort, Dependent):
+        expected_names = ascription.requires_set
+        actual_names = set({w._original_name for w in sort.requires_set})
+        return expected_names == actual_names
+
+    return False
 
 # Possibly several things to make this more efficient:
 # - check for ill-connectedness during the process, not just after getting the reachability set
@@ -132,10 +160,10 @@ def annotate_module(module):
             print(f"Getting sort for wire {str(wire)}...", end='')
 
         sort = get_wire_sort(wire, module)
-        # If wire.sort was ascribed, check it and report if not matching
-        # We have the user provide the classname of the sort, rather
-        # than an actual instance of the class.
-        if wire.sort and not isinstance(sort, wire.sort):
+        # If wire.sort was ascribed, check it and report if not matching.
+        # The user can provide the classname of the sort or
+        # an actual instance of the class.
+        if wire.sort and not sort_matches(wire.sort, sort):
             raise PyrtlError(
                 f"Unmatched sort ascription on wire {str(wire)}.\n"
                 f"User provided {wire.sort.__name__}\n"
@@ -154,7 +182,7 @@ def get_wire_sort(wire, module):
         # ... and then just filter for the module outputs that wire affects
         affects = set(w for w in forward if w in module.outputs)
         if affects:
-            return Needed(wire, affects)
+            return Needed(affects, wire=wire, ascription=False)
         return Free(wire)
     elif isinstance(wire, _ModOutput):
         # Get its backward reachbility (wires that 'wire' combinationally depends on WITHIN this module)...
@@ -162,7 +190,7 @@ def get_wire_sort(wire, module):
         # ... and then jus tilfter for the module inputs it depends on
         depends = set(w for w in backward if w in module.inputs)
         if depends:
-            return Dependent(wire, depends)
+            return Dependent(depends, wire=wire, ascription=False)
         return Giving(wire)
     else:
         raise PyrtlError("Only get wire sorts of inputs/outputs")
