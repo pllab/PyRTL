@@ -635,6 +635,7 @@ class Block(object):
     def sanity_check_net(self, net):
         """ Check that net is a valid LogicNet. """
         from .wire import Input, Output, Const
+        from .module import _ModOutput
         from .memory import _MemReadBase
 
         # general sanity checks that apply to all operations
@@ -655,9 +656,13 @@ class Block(object):
         for w in net.dests:
             if isinstance(w, (Input, Const)):
                 raise PyrtlInternalError('error, Inputs, Consts cannot be destinations to a net')
+            # Checking for _ModInput is done within module.py
         for w in net.args:
             if isinstance(w, Output):
                 raise PyrtlInternalError('error, Outputs cannot be arguments for a net')
+            if isinstance(w, _ModOutput) and w.module.in_definition:
+                raise PyrtlError(f"Invalid module. Module output {str(w)} cannot be "
+                                "used as destinations to a net within a module definition.")
 
         if net.op not in self.legal_ops:
             raise PyrtlInternalError('error, net op "%s" not from acceptable set %s' %

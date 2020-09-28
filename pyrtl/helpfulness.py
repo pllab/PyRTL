@@ -97,14 +97,17 @@ def sort_matches(ascription, sort):
 def error_if_not_well_connected(from_wire, to_wire):
     # NOTE: this assumes everythings is in the same working block.
     from .module import _ModInput, _ModOutput
+
+    if (from_wire is None) and (to_wire is None):
+        raise PyrtlError("Cannot check well-connectedness of two None inputs")
         
-    if not isinstance(from_wire, _ModOutput):
+    if (from_wire is None) or not isinstance(from_wire, _ModOutput):
         # get all the closest _ModOutputs that combinationally connect to this regular wire
         from_output_wires = set(w for w in _backward_combinational_reachability(from_wire) if isinstance(w, _ModOutput))
     else:
         from_output_wires = {from_wire}
 
-    if not isinstance(to_wire, _ModInput):
+    if (to_wire is None) or not isinstance(to_wire, _ModInput):
         # get all the closest _ModInputs that this wire combinationally connects to
         to_input_wires = set(w for w in _forward_combinational_reachability(to_wire) if isinstance(w, _ModInput))
     else:

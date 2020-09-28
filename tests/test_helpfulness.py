@@ -535,7 +535,7 @@ class TestHelpfulness(unittest.TestCase):
             def definition(self):
                 a = self.Input(4, 'a', sort=pyrtl.helpfulness.Dependent)
                 b = self.Output(6, 'b', sort=pyrtl.helpfulness.Dependent)
-                b <<= r * 4
+                b <<= r * 4  # Never reached
         
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             L()
@@ -551,7 +551,7 @@ class TestHelpfulness(unittest.TestCase):
             def definition(self):
                 a = self.Input(4, 'a', sort=pyrtl.helpfulness.Needed)
                 b = self.Output(6, 'b', sort=pyrtl.helpfulness.Needed)
-                b <<= r * 4
+                b <<= r * 4  # Never reached
         
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             L()

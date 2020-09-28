@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Set
+import time
 from .core import working_block, Block, _NameIndexer
 from .helpfulness import annotate_module, error_if_not_well_connected, Free, Needed, Giving, Dependent
 from .pyrtlexceptions import PyrtlError
@@ -85,6 +86,17 @@ class Module(ABC):
         for wire in self.outputs:
             if wire not in src_dict:
                 raise PyrtlError(f"Invalid module. Output {str(wire)} is not connected to any internal module logic.")
+    
+    def _check_all_well_connected(self):
+        # Call this if you want to check the well-connectedness at the end,
+        # rather than after each connection during design elaboration; mostly
+        # useful to seeing how long it takes, since checking well-connectedness
+        # after each connection is made makes errors easier to report to the user.
+        #ts = time.perf_counter()
+        for mo in self.block.wirevector_subset(_ModOutput):
+            error_if_not_well_connected(mo, None)
+        #te = time.perf_counter()
+        #print(f"Time to check: {te - ts}")
 
     def __init__(self, name="", block=None):
         # If the user supplies a name to their module's initializer and wants to set it via `self.name=`,
@@ -96,7 +108,10 @@ class Module(ABC):
         self.output_dict = {}
         self._definition() # Must be done before annotating the module's inputs/outputs for helpfulness
         self._check_all_io_internally_connected() # Must be done before annotating module, because we rely on the module being connected internally
+        #ts = time.perf_counter()
         annotate_module(self)
+        #te = time.perf_counter()
+        #print(f"Time to annotate: {te - ts}")
     
     def __getattr__(self, wirename):
         if wirename in self.__dict__['input_dict']:
@@ -165,7 +180,10 @@ def module_from_block(block: Block = None):
     for wire in io:
         m._to_module_io(wire)
     m._check_all_io_internally_connected()
+    #ts = time.perf_counter()
     annotate_module(m)
+    #te = time.perf_counter()
+    #print(f"Time to annotate: {te - ts}")
     return m
 
 class ModIOWire(WireVector):
@@ -273,11 +291,12 @@ class _ModOutput(ModIOWire):
             raise PyrtlError(f"Invalid module. Module output {str(self)} can only "
                               "be used on the lhs of <<= while within a module definition.")
 
-        if isinstance(other, _ModOutput) and self.module == other.module:
-            # Check for equivalent modules because it's okay if it's a connection
-            # from an outer module to a nested module.
-            raise PyrtlError(f"Invalid module. Module output {str(other)} cannot be "
-                              "used on the rhs of <<= while within a module definition.")
+        # This is checked in core.py:sanity_check_net()
+        # if isinstance(other, _ModOutput) and self.module == other.module:
+        #     # Check for equivalent modules because it's okay if it's a connection
+        #     # from an outer module to a nested module.
+        #     raise PyrtlError(f"Invalid module. Module output {str(other)} cannot be "
+        #                       "used on the rhs of <<= while within a module definition.")
 
         if self.is_driven():
             raise PyrtlError(f"Attempted to connect to already-connected module output {str(self)})")

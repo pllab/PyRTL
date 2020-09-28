@@ -108,7 +108,7 @@ class TestBasicModule(unittest.TestCase):
 
     # TODO I don't have this check actually happening yet,
     # so for, just don't do the bad thing.
-    def _test_bad_output_as_arg(self):
+    def test_bad_output_as_arg(self):
         class A(pyrtl.Module):
             def __init__(self):
                 super().__init__()
@@ -121,16 +121,19 @@ class TestBasicModule(unittest.TestCase):
                 c <<= a + 1
                 # Allowing 'd <<= c + b - 2' is treated as bad because we might
                 # not know c's requires_set before we need to check d.
-                # I think the non-determinism in iterating over sets would causes
+                # I think the non-determinism in iterating over sets would cause
                 # this to fault occassionally because the _ModOutput it
                 # reaches doesn't have a 'sort' attribute yet.
+                # This is an artificial restriction, though. Being a little smarter,
+                # we could just create a new wire copying the nets that were used
+                # to create c.
                 d <<= c + b - 2
 
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             A()
         self.assertEqual(str(ex.exception),
-            f"Invalid module. Module output c cannot be "
-            "used on the rhs of <<= while within a module definition.")
+            f"Invalid module. Module output c/4W cannot be "
+             "used as destinations to a net within a module definition.")
     
     def test_no_super_call_in_initializer(self):
         class M(pyrtl.Module):
