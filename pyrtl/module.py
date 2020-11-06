@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Set
 import time
 from .core import working_block, Block, _NameIndexer
-from .helpfulness import annotate_module, error_if_not_well_connected, Free, Needed, Giving, Dependent
+from .helpfulness import annotate_module, Free, Needed, Giving, Dependent
 from .pyrtlexceptions import PyrtlError
 from .wire import WireVector, Input, Output
 from .transform import replace_wire
@@ -10,73 +10,46 @@ from .transform import replace_wire
 _modIndexer = _NameIndexer("mod_tmp_")
 
 class Module(ABC):
+    # [x]
     @abstractmethod
     def definition(self, *args):
         pass
 
+    # [x]
     def Input(self, bitwidth, name, sort=None, strict=False):
-        if not self.in_definition:
+        if not self._in_definition:
             raise PyrtlError("Cannot create a module input outside of its definition")
         wv = _ModInput(bitwidth, name, self, sort, strict)
         self.input_dict[name] = wv
         return wv
 
+    # [x]
     def Output(self, bitwidth, name, sort=None):
-        if not self.in_definition:
+        if not self._in_definition:
             raise PyrtlError("Cannot create a module output outside of its definition")
         wv = _ModOutput(bitwidth, name, self, sort)
         self.output_dict[name] = wv
         return wv
     
+    # [x]
     @property
     def inputs(self):
         return set(self.input_dict.values())
 
+    # [x]
     @property
     def outputs(self):
         return set(self.output_dict.values())
     
-    # TODO Problem if wire is a register...
-    # TODO Make sure this wire isn't being used on the LHS of something
-    def to_input(self, wire, name=""):
-        """ (Experimental): Promote a wire to be a module's input """
-        if not self.in_definition:
-            raise PyrtlError("Cannot promote a wire to a module input outside of a module's definition")
-        if not name:
-            if wire.name.startswith("tmp"):
-                raise PyrtlError(f"Trying to use the internal name of a wire ({wire.name}). "
-                    "Either explicitly name the wire, or pass in a non-empty name to this method.")
-        return self._to_mod_input(wire, name=name)
 
-    # TODO Problem if wire is a register...
-    # TODO Make sure this wire isn't being used on the RHS (e.g. other <<= this) of something,
-    #      or allow it and make the necessary changes.
-    def to_output(self, wire, name=""):
-        """ (Experimental): Promote a wire to be a module's output """
-        if not self.in_definition:
-            raise PyrtlError("Cannot promote a wire to a module output outside of a module's definition")
-        if not name:
-            if wire.name.startswith("tmp"):
-                raise PyrtlError(f"Trying to use the internal name of a wire ({wire.name}). "
-                    "Either explicitly name the wire, or pass in a non-empty name to this method.")
-        return self._to_mod_output(wire, name=name)
-
-    def to_pyrtl_io(self):
-        """ Sets this modules' input/output wires as the
-            current block's input/output wires (normally
-            only useful when running a simulation).
-        """
-        for w in self.inputs:
-            w.to_pyrtl_input()
-        for w in self.outputs:
-            w.to_pyrtl_output()
-
+    # [x]
     def _definition(self):
-        self.in_definition = True
+        """ Actually generates the netlist associated with this module """
+        self._in_definition = True
         self.definition()
-        self.in_definition = False
+        self._in_definition = False
     
-    def _check_all_io_internally_connected(self):
+    def _sanity_check(self):
         # Ensure that all _ModInput and _ModOutput wires
         # have been connected to some internal module logic
         src_dict, dest_dict = self.block.net_connections()
@@ -86,32 +59,33 @@ class Module(ABC):
         for wire in self.outputs:
             if wire not in src_dict:
                 raise PyrtlError(f"Invalid module. Output {str(wire)} is not connected to any internal module logic.")
+
+        # Check that all internal wires are encapsulated,
+        # meaning they don't directly connect to any wires defined outside the module
+        # TODO
     
-    def _check_all_well_connected(self):
-        # Call this if you want to check the well-connectedness at the end,
-        # rather than after each connection during design elaboration; mostly
-        # useful to seeing how long it takes, since checking well-connectedness
-        # after each connection is made makes errors easier to report to the user.
-        #ts = time.perf_counter()
-        for mo in self.block.wirevector_subset(_ModOutput):
-            error_if_not_well_connected(mo, None)
-        #te = time.perf_counter()
-        #print(f"Time to check: {te - ts}")
+    # def _check_all_well_connected(self):
+    #     # Call this if you want to check the well-connectedness at the end,
+    #     # rather than after each connection during design elaboration; mostly
+    #     # useful to seeing how long it takes, since checking well-connectedness
+    #     # after each connection is made makes errors easier to report to the user.
+    #     #ts = time.perf_counter()
+    #     for mo in self.block.wirevector_subset(_ModOutput):
+    #         error_if_not_well_connected(mo, None)
+    #     #te = time.perf_counter()
+    #     #print(f"Time to check: {te - ts}")
 
     def __init__(self, name="", block=None):
-        # If the user supplies a name to their module's initializer and wants to set it via `self.name=`,
+        # TODO If the user supplies a name to their module's initializer and wants to set it via `self.name=`,
         # we need them to pass it into this initializer too. Not sure how to enforce this...
         self.name = name if name else _modIndexer.make_valid_string()
-        self.block = block if block else working_block()
+        self.block = working_block(block)
         self.block._add_module(self) # Must be done before _definition() for checking certain internal well-connected properties
         self.input_dict = {}
         self.output_dict = {}
         self._definition() # Must be done before annotating the module's inputs/outputs for helpfulness
-        self._check_all_io_internally_connected() # Must be done before annotating module, because we rely on the module being connected internally
-        #ts = time.perf_counter()
+        self._sanity_check()  # Must be done *before* annotating module, because we rely on the module being connected internally
         annotate_module(self)
-        #te = time.perf_counter()
-        #print(f"Time to annotate: {te - ts}")
     
     def __getattr__(self, wirename):
         if wirename in self.__dict__['input_dict']:
@@ -132,17 +106,18 @@ class Module(ABC):
     def __setitem__(self, key, value):
         pass
 
+    # [x]
     def __str__(self):
-        s = ""
-        s += f"Module '{self.__class__.__name__}'\n"
+        s = f"Module '{self.__class__.__name__}'\n"
         s += f"  Inputs:\n"
-        for wire in self.inputs:
+        for wire in sorted(self.inputs, key=lambda i: i._original_name):
             s += f"    {wire._original_name, str(wire.sort)}\n"
         s += f"  Outputs:\n"
-        for wire in self.outputs:
+        for wire in sorted(self.outputs, key=lambda o: o._original_name):
             s += f"    {wire._original_name, str(wire.sort)}\n"
         return s
 
+    # [?]
     def _to_mod_input(self, wire, name=None):
         name = name if name else wire.name
         new_wire = _ModInput(len(wire), name=name, module=self)
@@ -151,6 +126,7 @@ class Module(ABC):
         self.block.add_wirevector(new_wire)
         return new_wire
     
+    # [?]
     def _to_mod_output(self, wire, name=None):
         name = name if name else wire.name
         new_wire = _ModOutput(len(wire), name=name, module=self)
@@ -159,7 +135,9 @@ class Module(ABC):
         self.block.add_wirevector(new_wire)
         return new_wire
     
+    # [x]
     def _to_module_io(self, wire):
+        """ Sets the given wire to be a module input/output wire """
         if not isinstance(wire, (Input, Output)):
             raise PyrtlError("Can only convert PyRTL Input/Output "
                 "wirevectors into module input/output")
@@ -168,18 +146,32 @@ class Module(ABC):
         elif isinstance(wire, Output):
             return self._to_mod_output(wire)
 
-def module_from_block(block: Block = None, timing_out=None):
+    # [x]
+    def to_pyrtl_io(self):
+        """ Sets this modules' input/output wires as the
+            current block's input/output wires (normally
+            only useful when running a simulation).
+        """
+        for w in self.inputs:
+            w.to_pyrtl_input()
+        for w in self.outputs:
+            w.to_pyrtl_output()
+
+def module_from_block(block = None, timing_out=None):
+    """ Convert a given block into a module. Its inputs and outputs become
+        the module's inputs/outputs.
+    """
     block = working_block(block)
-    class FromBlock(Module):
+    class Top(Module):
         def __init__(self):
             super().__init__(block=block)
         def definition(self):
             pass
-    m = FromBlock()
+    m = Top()
     io = block.wirevector_subset((Input, Output))
     for wire in io:
         m._to_module_io(wire)
-    m._check_all_io_internally_connected()
+    # m._sanity_check()  # TODO add back in
     if timing_out:
         ts = time.perf_counter()
     annotate_module(m)
@@ -235,11 +227,11 @@ class _ModInput(ModIOWire):
     
     def __ilshift__(self, other):
         """ self(_ModInput) <<= other """
-        if self.module.in_definition:
+        if self.module._in_definition:
             raise PyrtlError(f"Invalid module. Module input {str(self)} cannot "
                               "be used on the lhs of <<= while within a module definition.")
         # Note that OtherModule(_ModInput) <<= self is permitted to allow for nested modules,
-        # because when that enters this method, OtherMoudle.in_definition will be False
+        # because when that enters this method, OtherMoudle._in_definition will be False
 
         if len(self) != len(other):
             if self.strict:
@@ -263,7 +255,8 @@ class _ModInput(ModIOWire):
         # meaning having an intermediate connection. Not a big deal, since the checking
         # will only traverse all the wires up to the nearest _ModOutput, after which time
         # it will skip over modules by just considering their requires/await sets
-        error_if_not_well_connected(other, self)
+        # TODO
+        #error_if_not_well_connected(other, self)
         super().__ilshift__(other)
         return self
     
@@ -289,7 +282,7 @@ class _ModOutput(ModIOWire):
 
     def __ilshift__(self, other):
         """ self(_ModOutput) <<= other """
-        if not self.module.in_definition:
+        if not self.module._in_definition:
             raise PyrtlError(f"Invalid module. Module output {str(self)} can only "
                               "be used on the lhs of <<= while within a module definition.")
 
