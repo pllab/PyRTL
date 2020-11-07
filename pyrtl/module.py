@@ -172,13 +172,10 @@ def module_from_block(block = None, timing_out=None):
     for wire in io:
         m._to_module_io(wire)
     # m._sanity_check()  # TODO add back in
-    if timing_out:
-        ts = time.perf_counter()
+    ts = time.perf_counter()
     annotate_module(m)
-    if timing_out:
-        te = time.perf_counter()
-        print(f"time to annotate (seconds): {te - ts}", file=timing_out)
-    return m
+    te = time.perf_counter()
+    return m, te - ts
 
 class ModIOWire(WireVector):
 
