@@ -20,8 +20,14 @@ from .wire import Const
 from .wire import Register
 from .wire import Bundle
 
-# helper functions
+# module
+from .module import Module
 
+# wire sorts
+from .wiresorts import Free, Needed
+from .wiresorts import Giving, Dependent
+
+# helper functions
 from .helperfuncs import input_list
 from .helperfuncs import output_list
 from .helperfuncs import register_list
@@ -64,7 +70,6 @@ from .corecircuits import shift_left_arithmetic
 from .corecircuits import shift_right_arithmetic
 from .corecircuits import shift_left_logical
 from .corecircuits import shift_right_logical
-
 
 # memory blocks
 from .memory import MemBlock

@@ -612,6 +612,7 @@ class TestVerilog(unittest.TestCase):
     def test_textual_consistency(self):
         from pyrtl.wire import _reset_wire_indexers
         from pyrtl.memory import _reset_memory_indexer
+        from pyrtl.module import _reset_module_indexer
 
         # To compare textual consistency, need to make
         # sure we're starting at the same index for all

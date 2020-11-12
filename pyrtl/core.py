@@ -261,6 +261,9 @@ class Block(object):
         self.legal_ops = set('w~&|^n+-*<>=xcsrm@')  # set of legal OPS
         self.rtl_assert_dict = {}   # map from wirevectors -> exceptions, used by rtl_assert
         self.memblock_by_name = {}  # map from name->memblock, for easy access to memblock objs
+        # module- and sort-related
+        self.modules = set() # set of all modules in the block
+        self.module_sorts = {}  # map from module class name -> (map from io name -> sort)
 
     def __str__(self):
         """String form has one LogicNet per line."""
