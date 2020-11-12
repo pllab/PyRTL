@@ -253,7 +253,7 @@ class TestBadModule(unittest.TestCase):
             print(m.i.name)
         self.assertEqual(str(ex.exception), "'inputs_by_name'")
 
-    # TODO I don't think this is necessary
+    # TODO I don't think this is necessarily bad
     @unittest.skip
     def test_bad_output_as_arg(self):
         class A(pyrtl.Module):
@@ -276,6 +276,25 @@ class TestBadModule(unittest.TestCase):
             'used as a source to a net within a module definition.'
         )
 
+    def test_bad_input_as_dest(self):
+        class M(pyrtl.Module):
+            def __init__(self, name):
+                super().__init__(name=name)
+
+            def definition(self):
+                i = self.Input(2, 'i')
+                o = self.Output(2, 'o')
+                i <<= 3
+                o <<= i
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            M('m1')
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid module. Module input "i/2I(m1)" cannot be '
+            'used as a destination to a net within a module definition.'
+        )
+
 
 class TestSimpleModule(unittest.TestCase):
 
@@ -286,13 +305,13 @@ class TestSimpleModule(unittest.TestCase):
     def test_internal_names(self):
         self.assertTrue
 
-    def testInputs(self):
+    def test_inputs(self):
         self.assertEqual(self.module.inputs, {self.module.a, self.module.b, self.module.cin})
 
-    def testOutputs(self):
+    def test_outputs(self):
         self.assertEqual(self.module.outputs, {self.module.s, self.module.cout})
 
-    def testToBlockIO(self):
+    def test_to_block_io(self):
         block = self.module.block
         self.assertEqual(block.wirevector_subset((pyrtl.Input, pyrtl.Output)), set())
         self.module.to_block_io()
@@ -303,7 +322,7 @@ class TestSimpleModule(unittest.TestCase):
             wio = block.get_wirevector_by_name(w._original_name)
             self.assertTrue(isinstance(wio, pyrtl.Output))
 
-    def testWiresHaveModuleAttribute(self):
+    def test_wires_have_module_attribute(self):
         # starting from inputs, trace all wires
         # connected to them through to the outputs,
         # and check they all have the correct module annotation.
@@ -312,7 +331,7 @@ class TestSimpleModule(unittest.TestCase):
         # modules to be connected, if it's to a submodule....
         pass
 
-    def testCorrectness(self):
+    def test_correctness(self):
         a = pyrtl.Input(1, 'a')
         b = pyrtl.Input(1, 'b')
         cin = pyrtl.Input(1, 'cin')
@@ -348,19 +367,60 @@ class TestModIO(unittest.TestCase):
         pyrtl.reset_working_block()
         self.module = OneBitAdder()
 
-    def testCannotCreateOutsideDefinition(self):
+    def test_cannot_create_outside_definition(self):
         # TODO either check the current module in the block,
         # or check if we're within the module's definition via the 'in_definition' flag...
         pass
 
-    def testOriginalNames(self):
+    @unittest.skip
+    def test_bad_input_assignment_outside_module(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = self.Input(2, 'i')
+                o = self.Output(4, 'o')
+                o <<= i + 2
+
+        m = M()
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            w = pyrtl.WireVector(2)
+            w <<= m.i
+        self.assertEqual(
+            str(ex.exception),
+            "Invalid module. Module input i/2W can only "
+            "be used on the rhs of <<= while within a module definition."
+        )
+
+    @unittest.skip
+    def test_bad_output_assignment_outside_module(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = self.Input(2, 'i')
+                o = self.Output(4, 'o')
+                o <<= i + 2
+
+        m = M()
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            m.o <<= 3
+        self.assertEqual(
+            str(ex.exception),
+            "Invalid module. Module output o/4W can only "
+            "be used on the lhs of <<= while within a module definition."
+        )
+
+    def test_original_names(self):
         self.assertEqual(self.module.a._original_name, 'a')
         self.assertEqual(self.module.b._original_name, 'b')
         self.assertEqual(self.module.cout._original_name, 'cout')
         self.assertEqual(self.module.s._original_name, 's')
         self.assertEqual(self.module.cin._original_name, 'cin')
 
-    def testToBlockInput(self):
+    def test_to_block_input(self):
         self.module.a.to_block_input('a')
         self.module.b.to_block_input('b')
         self.module.cin.to_block_input('cin')
@@ -369,7 +429,7 @@ class TestModIO(unittest.TestCase):
             wio = block.get_wirevector_by_name(w._original_name)
             self.assertTrue(isinstance(wio, pyrtl.Input))
 
-    def testToBlockOutput(self):
+    def test_to_block_output(self):
         self.module.s.to_block_output('s')
         self.module.cout.to_block_output('cout')
         block = self.module.block
@@ -384,11 +444,10 @@ class TestNestedModules(unittest.TestCase):
         pyrtl.reset_working_block()
         self.module = NBitAdder(4)
 
-    def testAccessSubmodules(self):
-        # TODO able to access internal modules and their internal i/o...
+    def test_access_submodules(self):
         pass
 
-    def testCorrectness(self):
+    def test_correctness(self):
         self.module.to_block_io()
         sim = pyrtl.Simulation()
         sim.step_multiple({

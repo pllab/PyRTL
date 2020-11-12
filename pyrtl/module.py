@@ -117,14 +117,13 @@ class Module(ABC):
                                  'to any internal module logic.' % str(wire))
 
         # This _ModInputs aren't used as destinations to nets within module
-        # (I don't think is necessary actually)
-        # for wire in self.inputs:
-        #     if wire in src_dict:
-        #         raise PyrtlError(
-        #             'Invalid module. Module input "%s" cannot be '
-        #             'used as a destination to a net (%s) within a module definition.'
-        #             % (str(wire), str(src_dict[wire]))
-        #         )
+        for wire in self.inputs:
+            if wire in src_dict:
+                raise PyrtlError(
+                    'Invalid module. Module input "%s" cannot be '
+                    'used as a destination to a net within a module definition.'
+                    % str(wire)
+                )
 
         # This _ModOutputs aren't used as arguments to nets within module,
         # (I don't think this is necessary actually).
@@ -132,8 +131,8 @@ class Module(ABC):
         #     if wire in dest_dict:
         #         raise PyrtlError(
         #             'Invalid module. Module output "%s" cannot be '
-        #             'used as an argument to a net (%s) within a module definition.'
-        #             % (str(wire), str(dest_dict[wire]))
+        #             'used as an argument to a net within a module definition.'
+        #             % str(wire)
         #         )
 
         # Check that all internal wires are encapsulated,
