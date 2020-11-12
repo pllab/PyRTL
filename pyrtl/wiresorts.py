@@ -293,10 +293,26 @@ def annotate_module(module):
     # For efficiency, only calculate the wire sorts of a module once;
     # save the information in the block
     if modname in module.block.module_sorts:
-        print(f"Using cached sort information for {modname}")
+        _verbose_print(f"Using cached sort information for {modname}")
         sorts = module.block.module_sorts[modname]
         for io in module.inputs.union(module.outputs):
-            io.sort = sorts[io._original_name]
+            # Now make sure our particular instance of this module refers
+            # to our own ModInputs/ModOutputs
+            def update_set(s):
+                r = set()
+                for w in s:
+                    r.add(getattr(module, w._original_name))
+                return r
+
+            sort = sorts[io._original_name]
+            if isinstance(sort, Free):
+                io.sort = Free(io)
+            elif isinstance(sort, Giving):
+                io.sort = Giving(io)
+            elif isinstance(sort, Needed):
+                io.sort = Needed(update_set(sort.needed_by_set), io, False)
+            else:
+                io.sort = Dependent(update_set(sort.depends_on_set), io, False)
     else:
         sortmap = {}
         needed_by, depends_on = _build_intramodular_reachability_maps(module=module)
@@ -322,15 +338,15 @@ def get_wire_sort(wire, needed_by, depends_on):
 
     if isinstance(wire, _ModInput):
         input = wire
-        ab = needed_by[input]
-        if ab:
-            return Needed(ab, wire=input, ascription=False)
+        nb_set = needed_by[input]
+        if nb_set:
+            return Needed(nb_set, wire=input, ascription=False)
         else:
             return Free(input)
     elif isinstance(wire, _ModOutput):
         output = wire
-        do = depends_on[output]
-        if do:
-            return Dependent(do, wire=output, ascription=False)
+        do_set = depends_on[output]
+        if do_set:
+            return Dependent(do_set, wire=output, ascription=False)
         else:
             return Giving(output)
