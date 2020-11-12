@@ -70,6 +70,21 @@ class TestBlockAttributes(unittest.TestCase):
             self.assertTrue(module.name.startswith('mod_'))
         self.assertEqual(set(pyrtl.working_block().modules), {m1, m2})
 
+    def test_several_named_modules_instantiated(self):
+        class A(pyrtl.Module):
+            def __init__(self, name):
+                super().__init__(name)
+
+            def definition(self):
+                a = self.Input(3, 'a')
+                b = self.Output(3, 'b')
+                b <<= a
+        
+        a1 = A('a1')
+        a2 = A('a2')
+        self.assertEqual(pyrtl.working_block().modules_by_name['a1'], a1)
+        self.assertEqual(pyrtl.working_block().modules_by_name['a2'], a2)
+
     def test_duplicate_module_names(self):
         class M(pyrtl.Module):
             def __init__(self, name):
@@ -145,7 +160,7 @@ class TestBadModule(unittest.TestCase):
             "Must supply a non-empty name for a module's input/output wire"
         )
 
-    def test_unique_io_names(self):
+    def test_duplicate_io_names(self):
         class M(pyrtl.Module):
             def __init__(self):
                 super().__init__()
@@ -168,6 +183,26 @@ class TestBadModule(unittest.TestCase):
             "Duplicate names found for the following different module "
             "input/output wires: ['a', 'd'] (make sure you are not using \"mod_\" "
             "as a prefix because that is reserved for internal use)."
+        )
+
+    def test_nonexistent_io_access(self):
+        class A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            def definition(self):
+                o = self.Output(4, 'o')
+                o <<= 4
+        a = A()
+        with self.assertRaises(AttributeError) as ex:
+            a.x
+        self.assertEqual(
+            str(ex.exception),
+            'Cannot get non-IO wirevector "x" from module.\n'
+            'Make sure you spelled the wire name correctly, '
+            'that you used "self.Input" and "self.Output" rather than '
+            '"pyrtl.Input" and "pyrtl.Output" to declare the IO wirevectors, '
+            'and that you are accessing them from the correct module.\n'
+            'Available input wires are [] and output wires are [o].'
         )
 
 

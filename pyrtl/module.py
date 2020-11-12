@@ -36,6 +36,8 @@ class Module(ABC):
     def __init__(self, name="", block=None):
         self.inputs = set()
         self.outputs = set()
+        self.inputs_by_name = {}  # map from input.original_name to wire (for performance)
+        self.outputs_by_name = {}  # map from output.original_name to wire (for perfomance)
         self.submodules = set()
         self.supermodule = None
         self.name = next_mod_name(name)
@@ -56,13 +58,13 @@ class Module(ABC):
     def Input(self, bitwidth, name):
         w = _ModInput(bitwidth, name, self)
         self.inputs.add(w)
-        setattr(self, name, w)
+        self.inputs_by_name[w._original_name] = w
         return w
 
     def Output(self, bitwidth, name):
         w = _ModOutput(bitwidth, name, self)
         self.outputs.add(w)
-        setattr(self, name, w)
+        self.outputs_by_name[w._original_name] = w
         return w
 
     def submod(self, mod):
@@ -126,6 +128,21 @@ class Module(ABC):
             s += "    %s\n" % repr({wire._original_name, str(wire.sort)})
         return s
 
+    def __getattr__(self, name):
+        if name in self.inputs_by_name:
+            return self.inputs_by_name[name]
+        elif name in self.outputs_by_name:
+            return self.outputs_by_name[name]
+        else:
+            raise AttributeError(
+                'Cannot get non-IO wirevector "%s" from module.\n'
+                'Make sure you spelled the wire name correctly, '
+                'that you used "self.Input" and "self.Output" rather than '
+                '"pyrtl.Input" and "pyrtl.Output" to declare the IO wirevectors, '
+                'and that you are accessing them from the correct module.\n'
+                'Available input wires are %s and output wires are %s.' %
+                (name, repr(list(self.inputs)), repr(list(self.outputs))))
+
 
 class _ModIO(WireVector):
     def __init__(self, bitwidth, name, module):
@@ -135,6 +152,9 @@ class _ModIO(WireVector):
         self.sort = None
         self.module = module
         super().__init__(bitwidth)
+
+    def __repr__(self):
+        return self._original_name
 
 
 class _ModInput(_ModIO):

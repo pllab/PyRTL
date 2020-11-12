@@ -262,8 +262,8 @@ class Block(object):
         self.rtl_assert_dict = {}   # map from wirevectors -> exceptions, used by rtl_assert
         self.memblock_by_name = {}  # map from name->memblock, for easy access to memblock objs
         # module- and sort-related:
-        self.modules = set()  # set of all modules in the block
-        self.module_sorts = {}  # map from module class name -> (map from io name -> sort)
+        self.modules_by_name = {}  # map from name to modules in the block
+        self.module_sorts = {}  # map from module class name -> (map from io.original_name -> sort)
         # TODO I'd prefer to avoid needing to do the following, in that it becomes like a context
         # have this stack of current_modules that get pushed/popped in nested instantiations...
         # self.current_module = []  # a stack of current modules, so wires/submodules know owner
@@ -377,7 +377,11 @@ class Block(object):
         created and isn't intended for use by PyRTL end users.
         """
         self.sanity_check_module(module)
-        self.modules.add(module)
+        self.modules_by_name[module.name] = module
+
+    @property
+    def modules(self):
+        return set(self.modules_by_name.values())
 
     def sanity_check_module(self, module):
         # Unique module name
