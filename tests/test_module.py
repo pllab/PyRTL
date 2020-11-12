@@ -79,7 +79,7 @@ class TestBlockAttributes(unittest.TestCase):
                 a = self.Input(3, 'a')
                 b = self.Output(3, 'b')
                 b <<= a
-        
+
         a1 = A('a1')
         a2 = A('a2')
         self.assertEqual(pyrtl.working_block().modules_by_name['a1'], a1)
@@ -187,12 +187,13 @@ class TestBadModule(unittest.TestCase):
 
     def test_nonexistent_io_access(self):
         class A(pyrtl.Module):
-            def __init__(self):
-                super().__init__()
+            def __init__(self, name):
+                super().__init__(name=name)
+
             def definition(self):
                 o = self.Output(4, 'o')
                 o <<= 4
-        a = A()
+        a = A('m1')
         with self.assertRaises(AttributeError) as ex:
             a.x
         self.assertEqual(
@@ -201,8 +202,78 @@ class TestBadModule(unittest.TestCase):
             'Make sure you spelled the wire name correctly, '
             'that you used "self.Input" and "self.Output" rather than '
             '"pyrtl.Input" and "pyrtl.Output" to declare the IO wirevectors, '
-            'and that you are accessing them from the correct module.\n'
-            'Available input wires are [] and output wires are [o].'
+            'and that you are accessing it from the correct module.\n'
+            'Available input wires are [] and output wires are [\'o/4O(m1)\'].'
+        )
+
+    def test_unconnected_inputs(self):
+        class A(pyrtl.Module):
+            def __init__(self, name):
+                super().__init__(name=name)
+
+            def definition(self):
+                i = self.Input(4, 'i')
+                o = self.Output(4, 'o')
+                o <<= 4
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            A('m1')
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid module. Input "i/4I(m1)" is not connected '
+            'to any internal module logic.'
+        )
+
+    def test_unconnected_outputs(self):
+        class A(pyrtl.Module):
+            def __init__(self, name):
+                super().__init__(name=name)
+
+            def definition(self):
+                o = self.Output(4, 'o')
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            A('m1')
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid module. Output "o/4O(m1)" is not connected '
+            'to any internal module logic.'
+        )
+
+    def test_no_super_call_in_initializer(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                pass
+
+            def definition(self):
+                i = self.Input(2, 'i')
+                o = self.Output(3, 'o')
+                o <<= i + 1
+
+        with self.assertRaises(KeyError) as ex:
+            m = M()
+            print(m.i.name)
+        self.assertEqual(str(ex.exception), "'inputs_by_name'")
+
+    # TODO I don't think this is necessary
+    @unittest.skip
+    def test_bad_output_as_arg(self):
+        class A(pyrtl.Module):
+            def __init__(self, name):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(3, 'a')
+                b = self.Input(4, 'b')
+                c = self.Output(4, 'c')
+                d = self.Output(3, 'd')
+                c <<= a + 1
+                d <<= c + b - 2
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            A('m1')
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid module. Module output "c/4O(m1)" cannot be '
+            'used as a source to a net within a module definition.'
         )
 
 

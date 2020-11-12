@@ -33,6 +33,7 @@ def next_mod_name(name=""):
 
 
 class Module(ABC):
+
     def __init__(self, name="", block=None):
         self.inputs = set()
         self.outputs = set()
@@ -76,6 +77,7 @@ class Module(ABC):
 
     def wires(self):
         """ Get all wires contained in this module (except those included in submodules) """
+        # TODO or change it to a 'logic' function that returns nets within this module?
         pass
 
     def to_block_io(self):
@@ -102,16 +104,37 @@ class Module(ABC):
                              'as a prefix because that is reserved for internal use).' %
                              (repr(io_names_list), _modIndexer.internal_prefix))
 
-        # All _ModInput and _ModOutput wires have been connected to some internal module logic.
         src_dict, dest_dict = self.block.net_connections()
+
+        # All _ModInput and _ModOutput wires have been connected to some internal module logic.
         for wire in self.inputs:
             if wire not in dest_dict:
-                raise PyrtlError("Invalid module. Input %s is not connected "
-                                 "to any internal module logic." % str(wire))
+                raise PyrtlError('Invalid module. Input "%s" is not connected '
+                                 'to any internal module logic.' % str(wire))
         for wire in self.outputs:
             if wire not in src_dict:
-                raise PyrtlError("Invalid module. Output %s is not connected "
-                                 "to any internal module logic." % str(wire))
+                raise PyrtlError('Invalid module. Output "%s" is not connected '
+                                 'to any internal module logic.' % str(wire))
+
+        # This _ModInputs aren't used as destinations to nets within module
+        # (I don't think is necessary actually)
+        # for wire in self.inputs:
+        #     if wire in src_dict:
+        #         raise PyrtlError(
+        #             'Invalid module. Module input "%s" cannot be '
+        #             'used as a destination to a net (%s) within a module definition.'
+        #             % (str(wire), str(src_dict[wire]))
+        #         )
+
+        # This _ModOutputs aren't used as arguments to nets within module,
+        # (I don't think this is necessary actually).
+        # for wire in self.outputs:
+        #     if wire in dest_dict:
+        #         raise PyrtlError(
+        #             'Invalid module. Module output "%s" cannot be '
+        #             'used as an argument to a net (%s) within a module definition.'
+        #             % (str(wire), str(dest_dict[wire]))
+        #         )
 
         # Check that all internal wires are encapsulated,
         # meaning they don't directly connect to any wires defined outside the module.
@@ -129,19 +152,21 @@ class Module(ABC):
         return s
 
     def __getattr__(self, name):
-        if name in self.inputs_by_name:
-            return self.inputs_by_name[name]
-        elif name in self.outputs_by_name:
-            return self.outputs_by_name[name]
+        if name in self.__dict__['inputs_by_name']:
+            return self.__dict__['inputs_by_name'][name]
+        elif name in self.__dict__['outputs_by_name']:
+            return self.__dict__['outputs_by_name'][name]
         else:
+            inputs = [str(i) for i in self.inputs]
+            outputs = [str(o) for o in self.outputs]
             raise AttributeError(
                 'Cannot get non-IO wirevector "%s" from module.\n'
                 'Make sure you spelled the wire name correctly, '
                 'that you used "self.Input" and "self.Output" rather than '
                 '"pyrtl.Input" and "pyrtl.Output" to declare the IO wirevectors, '
-                'and that you are accessing them from the correct module.\n'
+                'and that you are accessing it from the correct module.\n'
                 'Available input wires are %s and output wires are %s.' %
-                (name, repr(list(self.inputs)), repr(list(self.outputs))))
+                (name, str(inputs), str(outputs)))
 
 
 class _ModIO(WireVector):
@@ -153,11 +178,13 @@ class _ModIO(WireVector):
         self.module = module
         super().__init__(bitwidth)
 
-    def __repr__(self):
-        return self._original_name
+    def __str__(self):
+        return "%s/%d%s(%s)" % (self._original_name, self.bitwidth, self._code, self.module.name)
 
 
 class _ModInput(_ModIO):
+    _code = "I"
+
     def to_block_input(self, name=""):
         """ Make this wire a block Input wire """
         name = name if name else self._original_name
@@ -169,6 +196,8 @@ class _ModInput(_ModIO):
 
 
 class _ModOutput(_ModIO):
+    _code = "O"
+
     def to_block_output(self, name=""):
         """ Make this wire a block Output wire """
         name = name if name else self._original_name
