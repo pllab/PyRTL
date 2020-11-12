@@ -21,6 +21,8 @@ class Module(ABC):
     def __init__(self, name="", block=None):
         self.inputs = set()
         self.outputs = set()
+        self.submodules = set()
+        self.supermodule = None
         self.block = working_block(block)
         self.name = name if name else _modIndexer.make_valid_string()
         self.definition()
@@ -42,11 +44,14 @@ class Module(ABC):
         setattr(self, name, w)
         return w
     
+    def submod(self, mod):
+        """ Register the module 'mod' as a submodule of this one """
+        self.submodules.add(mod)
+        mod.supermodule = self
+        return mod
+    
     def wires(self):
-        """ Get all wires contained in this module, (except those included in submodules) """
-        pass
-
-    def submodules(self):
+        """ Get all wires contained in this module (except those included in submodules) """
         pass
 
     def to_block_io(self):

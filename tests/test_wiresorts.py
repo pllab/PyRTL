@@ -35,7 +35,8 @@ class NBitAdder(pyrtl.Module):
 
         ss = []
         for i in range(self.n):
-            oba = OneBitAdder()
+            # oba = OneBitAdder()
+            oba = self.submod(OneBitAdder())
             oba.a <<= a[i]
             oba.b <<= b[i]
             oba.cin <<= cin
@@ -73,22 +74,21 @@ class TestWireSortNestedModulesCombinational(unittest.TestCase):
         pyrtl.reset_working_block()
         self.module = NBitAdder(4)
     
-    @unittest.skip
     def testSortCaching(self):
         # For each submodule, verify the wiresorts are correct, meaning we didn't
         # just copy the sort via caching, but actually got the corresponding io
-        # for each submodule.
+        # wire for each submodule.
         for oba in self.module.submodules:
-            self.assertEqual(oba.a.sort, pyrtl.wiresorts.Needed)
-            self.assertEqual(oba.a.sort.needed_by_set, {oba.s, oba.cout})
-            self.assertEqual(oba.b.sort, pyrtl.wiresorts.Needed)
-            self.assertEqual(oba.b.sort.needed_by_set, {oba.s, oba.cout})
-            self.assertEqual(oba.cin.sort, pyrtl.wiresorts.Needed)
-            self.assertEqual(oba.cin.sort.needed_by_set, {oba.s, oba.cout})
-            self.assertEqual(oba.s.sort, pyrtl.wiresorts.Dependent)
-            self.assertEqual(oba.s.sort.depends_on_set, {oba.a, oba.b, oba.cin})
-            self.assertEqual(oba.cout.sort, pyrtl.wiresorts.Dependent)
-            self.assertEqual(oba.cout.sort.depends_on_set, {oba.a, oba.b, oba.cin})
+            self.assertTrue(isinstance(oba.a.sort, pyrtl.wiresorts.Needed))
+            self.assertTrue(oba.a.sort.needed_by_set, {oba.s, oba.cout})
+            self.assertTrue(isinstance(oba.b.sort, pyrtl.wiresorts.Needed))
+            self.assertTrue(oba.b.sort.needed_by_set, {oba.s, oba.cout})
+            self.assertTrue(isinstance(oba.cin.sort, pyrtl.wiresorts.Needed))
+            self.assertTrue(oba.cin.sort.needed_by_set, {oba.s, oba.cout})
+            self.assertTrue(isinstance(oba.s.sort, pyrtl.wiresorts.Dependent))
+            self.assertTrue(oba.s.sort.depends_on_set, {oba.a, oba.b, oba.cin})
+            self.assertTrue(isinstance(oba.cout.sort, pyrtl.wiresorts.Dependent))
+            self.assertTrue(oba.cout.sort.depends_on_set, {oba.a, oba.b, oba.cin})
 
 
 if __name__ == "__main__":

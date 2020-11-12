@@ -33,7 +33,8 @@ class NBitAdder(pyrtl.Module):
 
         ss = []
         for i in range(self.n):
-            oba = OneBitAdder()  # TODO or self.submod(OneBitAdder()) ?
+            #oba = OneBitAdder()  # Doing this is legal, but won't register it with the supermodule
+            oba = self.submod(OneBitAdder())
             oba.a <<= a[i]
             oba.b <<= b[i]
             oba.cin <<= cin

@@ -264,7 +264,9 @@ class Block(object):
         # module- and sort-related:
         self.modules = set() # set of all modules in the block
         self.module_sorts = {}  # map from module class name -> (map from io name -> sort)
-        self.current_module = None  # so wires and submodules can determine to whom they belong
+        # TODO I'd prefer to avoid needing to do this, in that it becomes like a context
+        # needed to have this stack of current_modules that get pushed/popped during nested instantiations...
+        #self.current_module = []  # a stack of current modules, so wires and submodules can determine to whom they belong
 
     def __str__(self):
         """String form has one LogicNet per line."""
