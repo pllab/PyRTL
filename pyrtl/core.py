@@ -262,11 +262,11 @@ class Block(object):
         self.rtl_assert_dict = {}   # map from wirevectors -> exceptions, used by rtl_assert
         self.memblock_by_name = {}  # map from name->memblock, for easy access to memblock objs
         # module- and sort-related:
-        self.modules = set() # set of all modules in the block
+        self.modules = set()  # set of all modules in the block
         self.module_sorts = {}  # map from module class name -> (map from io name -> sort)
-        # TODO I'd prefer to avoid needing to do this, in that it becomes like a context
-        # needed to have this stack of current_modules that get pushed/popped during nested instantiations...
-        #self.current_module = []  # a stack of current modules, so wires and submodules can determine to whom they belong
+        # TODO I'd prefer to avoid needing to do the following, in that it becomes like a context
+        # have this stack of current_modules that get pushed/popped in nested instantiations...
+        # self.current_module = []  # a stack of current modules, so wires/submodules know owner
 
     def __str__(self):
         """String form has one LogicNet per line."""
@@ -369,6 +369,24 @@ class Block(object):
             raise PyrtlError('error, block does not have a memblock named %s' % name)
         else:
             return None
+
+    def _add_module(self, module):
+        """ Registers a module to the block.
+
+        Note that this is done automatically when a module is
+        created and isn't intended for use by PyRTL end users.
+        """
+        self.sanity_check_module(module)
+        self.modules.add(module)
+
+    def sanity_check_module(self, module):
+        # Unique module name
+        mod_names_set = set(m.name for m in self.modules)
+        if module.name in mod_names_set:
+            raise PyrtlError('Module with name "%s" already exists.' % module.name)
+
+        # TODO possibly some other checks here? the module checks itself upon creation,
+        # so these checks are more to verify its correctness in the presence of others
 
     def wirevector_subset(self, cls=None, exclude=tuple()):
         """Return set of wirevectors, filtered by the type or tuple of types provided as cls.

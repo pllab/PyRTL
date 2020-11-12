@@ -7,6 +7,7 @@ import six
 import pyrtl
 from pyrtl.rtllib import fifos
 
+
 class TestSimpleModules(unittest.TestCase):
 
     def setUp(self):
@@ -54,7 +55,8 @@ class TestSimpleModules(unittest.TestCase):
         self.assertTrue(isinstance(t.w8.sort, pyrtl.wiresorts.Giving))
         self.assertTrue(isinstance(t.w9.sort, pyrtl.wiresorts.Dependent))
         self.assertEqual(t.w9.sort.depends_on_set, {t.w1, t.w4})
-    
+
+
 class TestMultipleIntraModules(unittest.TestCase):
     class M(pyrtl.Module):
         def __init__(self, name=""):
@@ -75,7 +77,7 @@ class TestMultipleIntraModules(unittest.TestCase):
             r = pyrtl.Register(5, 'r')
             r.next <<= a + 1
             b <<= r * 4
-    
+
     def setUp(self):
         pyrtl.reset_working_block()
 
@@ -87,7 +89,7 @@ class TestMultipleIntraModules(unittest.TestCase):
         b_out <<= m.b - 1
 
         sim = pyrtl.Simulation()
-        sim.step_multiple({'a_in': [1,2,3]}, {'b_out': [7, 11, 15]})
+        sim.step_multiple({'a_in': [1, 2, 3]}, {'b_out': [7, 11, 15]})
 
         output = six.StringIO()
         sim.tracer.print_trace(output, compact=True)
@@ -97,7 +99,7 @@ class TestMultipleIntraModules(unittest.TestCase):
         self.assertTrue(isinstance(m.b.sort, pyrtl.wiresorts.Dependent))
         self.assertEqual(m.a.sort.needed_by_set, {m.b})
         self.assertEqual(m.b.sort.depends_on_set, {m.a})
-    
+
     def test_three_connected_simple_cycle_no_state(self):
         # TODO continue from here, adding in my previous intra-checks
         m1 = TestMultipleIntraModules.M()
@@ -108,8 +110,9 @@ class TestMultipleIntraModules(unittest.TestCase):
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m1.a <<= m3.b
         self.assertTrue(str(ex.exception).startswith("Connection error!"))
-    
+
     # TODO possibly add the reachability tests
+
 
 class TestNestedModules(unittest.TestCase):
 
@@ -118,7 +121,7 @@ class TestNestedModules(unittest.TestCase):
             super().__init__()
 
         def definition(self):
-            a = self.Input(1, 'a') 
+            a = self.Input(1, 'a')
             b = self.Input(1, 'b')
             cin = self.Input(1, 'cin')
             s = self.Output(1, 's')
@@ -131,7 +134,7 @@ class TestNestedModules(unittest.TestCase):
             assert (n > 0)
             self.n = n
             super().__init__()
-    
+
         def definition(self):
             a = self.Input(self.n, 'a')
             b = self.Input(self.n, 'b')
@@ -154,7 +157,7 @@ class TestNestedModules(unittest.TestCase):
     def setUp(self):
         pyrtl.reset_working_block()
         self.module = TestNestedModules.NBitAdder(4)
-    
+
     def test_sort_caching_correct(self):
         # For each submodule, verify the wiresorts are correct, meaning we didn't
         # just copy the sort via caching, but actually got the corresponding io

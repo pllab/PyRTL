@@ -1,24 +1,28 @@
 import pyrtl
 
+
 class Fifo(pyrtl.Module):
     def __init__(self, bitwidth, nels):
         self.bitwidth = bitwidth
         self.nels = nels
         super().__init__()
-    
+
     def definition(self):
         ######################
         # I/O
         ######################
         reset = self.Input(1, 'reset')
-        ready_in, valid_in = self.Input(1, 'ready_in'), self.Input(1, 'valid_in')
-        ready_out, valid_out = self.Output(1, 'ready_out'), self.Output(1, 'valid_out')
-        data_in, data_out = self.Input(self.bitwidth, 'data_in'), self.Output(self.bitwidth, 'data_out')
+        ready_in = self.Input(1, 'ready_in')
+        valid_in = self.Input(1, 'valid_in')
+        ready_out = self.Output(1, 'ready_out')
+        valid_out = self.Output(1, 'valid_out')
+        data_in = self.Input(self.bitwidth, 'data_in')
+        data_out = self.Output(self.bitwidth, 'data_out')
 
         ######################
         # Internal state
         ######################
-        bw = len(pyrtl.as_wires(self.nels)) # also: math.ceil(math.log2(self.nels))
+        bw = len(pyrtl.as_wires(self.nels))
         queue = pyrtl.MemBlock(self.bitwidth, bw)
         count = pyrtl.Register(bw + 1)
         read_ix, write_ix = pyrtl.Register(bw), pyrtl.Register(bw)

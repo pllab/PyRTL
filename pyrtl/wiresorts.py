@@ -10,12 +10,15 @@ from .wire import Register
 
 Verbose = False
 
+
 def _verbose_print(s):
     if Verbose:
         print(s)
 
+
 class InputSort(abc.ABC):
     pass
+
 
 class Free(InputSort):
     # Allowing wire=None allows these to be used instantiated as ascriptions
@@ -25,6 +28,7 @@ class Free(InputSort):
 
     def __str__(self):
         return "Free"
+
 
 class Needed(InputSort):
     def __init__(self, needed_by_set, wire=None, ascription=True):
@@ -37,13 +41,14 @@ class Needed(InputSort):
             for w in self.needed_by_set:
                 assert(isinstance(w, _ModOutput))
 
-
     def __str__(self):
         wns = ", ".join(map(str, sorted(self.needed_by_set, key=lambda w: w._original_name)))
-        return f"Needed (needed by: {wns})"
+        return "Needed (needed by: %s)" % wns
+
 
 class OutputSort(abc.ABC):
     pass
+
 
 class Giving(OutputSort):
     def __init__(self, wire=None):
@@ -52,6 +57,7 @@ class Giving(OutputSort):
 
     def __str__(self):
         return "Giving"
+
 
 class Dependent(OutputSort):
     def __init__(self, depends_on_set, wire=None, ascription=True):
@@ -65,21 +71,23 @@ class Dependent(OutputSort):
                 assert(isinstance(w, _ModInput))
 
     def __str__(self):
-        wns = ", ".join(map(str, sorted(self.depends_on_set, key=lambda w:w._original_name)))
-        return f"Dependent (depends on: {wns})"
+        wns = ", ".join(map(str, sorted(self.depends_on_set, key=lambda w: w._original_name)))
+        return "Dependent (depends on: %s)" % wns
 
 # TODO a function that just checks if a new connection introduces a problem, without
 # us having to do all the extra checks if possible
 # was "error_if_not_well_connected"
 
+
 def is_well_connected_block(block=None):
     """ Check if all modules in a block are well-connected to one another.
 
-        Compute the intermodular reachability once to save some computation hopefully. 
+        Compute the intermodular reachability once to save some computation hopefully.
     """
     block = working_block(block)
     wires_to_inputs = _build_intermodular_reachability_maps(block.modules)
     return all(is_well_connected_module(m, wires_to_inputs) for m in block.modules)
+
 
 def is_well_connected_module(module, wires_to_inputs):
     """ Check if a single module is well-connected to other modules in the block"""
@@ -96,12 +104,17 @@ def is_well_connected_module(module, wires_to_inputs):
                     for needed_by_w in input.sort.needed_by_set:
                         assert isinstance(needed_by_w, _ModOutput)
                         if depends_on_w in wires_to_inputs[needed_by_w]:
-                            print(f"ill-connection between {str(input)} ({input.module.name}) and {str(output)} ({output.module.name})")
+                            print("ill-connection between %s (%s) and %s (%s)"
+                                  % (str(input), input.module.name,
+                                     str(output), output.module.name))
                             return False
     return True
 
+
 def _build_intermodular_reachability_maps(modules):
-    """ Right now, just computes for each module output and wire outside a module, the set of module inputs it reaches combinationally """
+    """ Right now, just computes for each module output and wire outside a module,
+        the set of module inputs it reaches combinationally
+    """
     from .module import _ModOutput
 
     # map from wire to set of module inputs it forward affects, combinationally
@@ -126,7 +139,7 @@ def _build_intermodular_reachability_maps(modules):
                         wires_to_inputs[s] = {input}
                     else:
                         wires_to_inputs[s].add(input)
-                
+
                 # Must take advantage of module annotations so we
                 # don't need to descend into more nets than needed
                 if isinstance(s, _ModOutput):
@@ -141,24 +154,26 @@ def _build_intermodular_reachability_maps(modules):
                     src_net = src_map[s]
                     assert src_net.dests[0] is s
 
-                    if src_net.op == 'm' and src_net.op_params[1].asynchronous == False:
+                    if src_net.op == 'm' and not src_net.op_params[1].asynchronous:
                         continue
                     if src_net.op == '@':
                         continue
                     work_list.extend(src_net.args)
 
-    # Add empty sets for at least the output wires that never reached an some other module's input combinationally
+    # Add empty sets for at least the output wires that never
+    # reached an some other module's input combinationally.
     for o in module.outputs:
         if o not in wires_to_inputs:
             wires_to_inputs[o] = set()
 
     return wires_to_inputs
 
+
 def _build_intramodular_reachability_maps(module):
     """ Constructs the awaited_by/depends_on maps limited to the module given.
 
         Assumes that modules are well-constructed in that all internal wires are
-        really internal (i.e. not connected to wires defined outside the module). 
+        really internal (i.e. not connected to wires defined outside the module).
 
         The advantage of this is that annotating each module input/output
         only requires traversing the module once at the beginning to build these maps,
@@ -175,7 +190,7 @@ def _build_intramodular_reachability_maps(module):
     src_map, dst_map = block.net_connections()
 
     for output in module.outputs:
-        _verbose_print(f"Output {str(output)}")
+        _verbose_print("Output " + str(output))
         work_list = [output]
         seen = set()
 
@@ -184,7 +199,7 @@ def _build_intramodular_reachability_maps(module):
             if a in seen:
                 continue
             seen.add(a)
-            _verbose_print(f"checking {str(a)}")
+            _verbose_print("checking " + str(a))
 
             # TODO check when this assertion should hold
             # if module and hasattr(a, 'module'):
@@ -204,7 +219,7 @@ def _build_intramodular_reachability_maps(module):
             src_net = src_map[a]
             assert src_net.dests[0] is a
 
-            if src_net.op == 'm' and src_net.op_param[1].asynchronous == False:
+            if src_net.op == 'm' and not src_net.op_param[1].asynchronous:
                 continue
             if src_net.op == '@':
                 raise PyrtlError("memwrites should not have a destination wire")
@@ -248,20 +263,21 @@ def _build_intramodular_reachability_maps(module):
 
             for dst_net in dst_nets:
                 assert any({d is arg for arg in dst_net.args})
-                if dst_net.op == 'm' and dst_net.op_params[1].asynchronous == False:
+                if dst_net.op == 'm' and not dst_net.op_params[1].asynchronous:
                     continue
                 if dst_net.op == '@':
                     continue
                 work_list.append(dst_net.dests[0])
-    
+
     # Add empty sets for at least the input/output wires that were never reached combinationally
     for io in module.inputs.union(module.outputs):
         if io not in needed_by:
             needed_by[io] = set()
         if io not in depends_on:
             depends_on[io] = set()
-    
+
     return needed_by, depends_on
+
 
 def sort_matches(ascription, sort):
     # User can just supply classname (e.g. sort=Needed) without specifying _what_
@@ -285,15 +301,16 @@ def sort_matches(ascription, sort):
 
     return False
 
+
 def annotate_module(module):
-    _verbose_print(f"Annotating module {module.name} with "
-                   f"{len(module.inputs)} inputs and {len(module.outputs)} outputs")
+    _verbose_print("Annotating module %s{module.name} with %d inputs and %d outputs."
+                   % (module.name, len(module.inputs), len(module.outputs)))
     modname = module.__class__.__name__
-    
+
     # For efficiency, only calculate the wire sorts of a module once;
     # save the information in the block
     if modname in module.block.module_sorts:
-        _verbose_print(f"Using cached sort information for {modname}")
+        _verbose_print("Using cached sort information for %s" % modname)
         sorts = module.block.module_sorts[modname]
         for io in module.inputs.union(module.outputs):
             # Now make sure our particular instance of this module refers
@@ -324,14 +341,16 @@ def annotate_module(module):
             # The user can provide the classname of the sort or an actual instance of the class.
             if io.sort and not sort_matches(io.sort, sort):
                 raise PyrtlError(
-                    f"Unmatched sort ascription on wire {str(io)} in module {io.module.name}.\n"
-                    f"User provided {io.sort.__name__}\n"
-                    f"But we computed {str(sort)}")
+                    "Unmatched sort ascription on wire %s in module %s.\n"
+                    "User provided %s.\n"
+                    "But we computed %s."
+                    % (str(io), io.module.name, io.sort.__name__, str(sort)))
             io.sort = sort
 
             sortmap[io._original_name] = sort
 
         module.block.module_sorts[modname] = sortmap
+
 
 def get_wire_sort(wire, needed_by, depends_on):
     from .module import _ModInput, _ModOutput

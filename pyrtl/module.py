@@ -4,18 +4,33 @@ from abc import ABC, abstractmethod
 import math
 import six
 
-from .wire import WireVector, Register, Input, Output
-from .memory import MemBlock
 from .core import working_block, reset_working_block, _NameIndexer
 from .corecircuits import as_wires, concat_list
-from .wiresorts import annotate_module
+from .memory import MemBlock
+from .pyrtlexceptions import PyrtlError
 from .transform import replace_wire
+from .wire import WireVector, Register, Input, Output
+from .wiresorts import annotate_module
 
 _modIndexer = _NameIndexer("mod_")
 
+
 def _reset_module_indexer():
     global _modIndexer
-    _modIndexer = _NameIndexer("mod_")
+    _modIndexer = _NameIndexer(_modIndexer.internal_prefix)
+
+
+def next_mod_name(name=""):
+    if name == "":
+        return _modIndexer.make_valid_string()
+    elif name.startswith(_modIndexer.internal_prefix):
+        raise PyrtlError(
+            'Starting a module name with "%s" is reserved for internal use.'
+            % _modIndexer.internal_prefix
+        )
+    else:
+        return name
+
 
 class Module(ABC):
     def __init__(self, name="", block=None):
@@ -23,13 +38,19 @@ class Module(ABC):
         self.outputs = set()
         self.submodules = set()
         self.supermodule = None
+        self.name = next_mod_name(name)
         self.block = working_block(block)
-        self.name = name if name else _modIndexer.make_valid_string()
+        self.block._add_module(self)
         self.definition()
+        self.sanity_check()
         annotate_module(self)
-    
+
     @abstractmethod
     def definition(self):
+        """ Each module subclass needs to provide the code that should be
+            elaborated when the module is instantiated. This is like the
+            `main` method of the module.
+        """
         pass
 
     def Input(self, bitwidth, name):
@@ -37,19 +58,20 @@ class Module(ABC):
         self.inputs.add(w)
         setattr(self, name, w)
         return w
-    
+
     def Output(self, bitwidth, name):
         w = _ModOutput(bitwidth, name, self)
         self.outputs.add(w)
         setattr(self, name, w)
         return w
-    
+
     def submod(self, mod):
         """ Register the module 'mod' as a submodule of this one """
+        # TODO I'm not sure if I love this approach
         self.submodules.add(mod)
         mod.supermodule = self
         return mod
-    
+
     def wires(self):
         """ Get all wires contained in this module (except those included in submodules) """
         pass
@@ -60,24 +82,60 @@ class Module(ABC):
             w.to_block_input()
         for w in self.outputs:
             w.to_block_output()
-    
+
+    def sanity_check(self):
+        # At least one _ModOutput
+        if not self.outputs:
+            raise PyrtlError("Module must have at least one output.")
+
+        # All _ModInput and _ModOutput names are unique (especially important since we use those
+        # names as attributes for accessing them via the dot operator on the module).
+        io_names_set = set(io._original_name for io in self.inputs.union(self.outputs))
+        if len(self.inputs.union(self.outputs)) != len(io_names_set):
+            io_names_list = sorted([io._original_name for io in self.inputs.union(self.outputs)])
+            for io in io_names_set:
+                io_names_list.remove(io)
+            raise PyrtlError('Duplicate names found for the following different module '
+                             'input/output wires: %s (make sure you are not using "%s" '
+                             'as a prefix because that is reserved for internal use).' %
+                             (repr(io_names_list), _modIndexer.internal_prefix))
+
+        # All _ModInput and _ModOutput wires have been connected to some internal module logic.
+        src_dict, dest_dict = self.block.net_connections()
+        for wire in self.inputs:
+            if wire not in dest_dict:
+                raise PyrtlError("Invalid module. Input %s is not connected "
+                                 "to any internal module logic." % str(wire))
+        for wire in self.outputs:
+            if wire not in src_dict:
+                raise PyrtlError("Invalid module. Output %s is not connected "
+                                 "to any internal module logic." % str(wire))
+
+        # Check that all internal wires are encapsulated,
+        # meaning they don't directly connect to any wires defined outside the module.
+        # TODO
+
     def __str__(self):
         """ Print out the wire sorts for each input and output """
-        s = f"Module '{self.__class__.__name__}'\n"
-        s += f"  Inputs:\n"
+        s = "Module '%s'\n" % self.__class__.__name__
+        s += "  Inputs:\n"
         for wire in sorted(self.inputs, key=lambda w: w._original_name):
-            s += f"    {wire._original_name, str(wire.sort)}\n"
-        s += f"  Outputs:\n"
+            s += "    %s\n" % repr({wire._original_name, str(wire.sort)})
+        s += "  Outputs:\n"
         for wire in sorted(self.outputs, key=lambda w: w._original_name):
-            s += f"    {wire._original_name, str(wire.sort)}\n"
+            s += "    %s\n" % repr({wire._original_name, str(wire.sort)})
         return s
+
 
 class _ModIO(WireVector):
     def __init__(self, bitwidth, name, module):
+        if not name:
+            raise PyrtlError("Must supply a non-empty name for a module's input/output wire")
         self._original_name = name
         self.sort = None
         self.module = module
         super().__init__(bitwidth)
+
 
 class _ModInput(_ModIO):
     def to_block_input(self, name=""):
@@ -85,8 +143,10 @@ class _ModInput(_ModIO):
         name = name if name else self._original_name
         w = Input(len(self), name=name, block=self.module.block)
         replace_wire(self, w, w, self.module.block)
-        # At this point, `self` has been removed from the block, but is present in `self.module.inputs`
+        # At this point, `self` has been removed from the block,
+        # but is present in `self.module.inputs`
         self.module.block.add_wirevector(w)
+
 
 class _ModOutput(_ModIO):
     def to_block_output(self, name=""):
@@ -94,5 +154,6 @@ class _ModOutput(_ModIO):
         name = name if name else self._original_name
         w = Output(len(self), name=name, block=self.module.block)
         replace_wire(self, w, w, self.module.block)
-        # At this point, `self` has been removed from the block, but is present in `self.module.outputs`
+        # At this point, `self` has been removed from the block,
+        # but is present in `self.module.outputs`
         self.module.block.add_wirevector(w)
