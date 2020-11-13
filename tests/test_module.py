@@ -346,16 +346,10 @@ class TestModIO(unittest.TestCase):
         pyrtl.reset_working_block()
         self.module = OneBitAdder()
 
-    def test_cannot_create_module_wires_outside_definition(self):
-        # TODO either check the current module in the block,
-        # or check if we're within the module's definition via the 'in_definition' flag...
-        pass
-
-    @unittest.skip
     def test_bad_input_assignment_outside_module(self):
         class M(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super().__init__(name="m1")
 
             def definition(self):
                 i = self.Input(2, 'i')
@@ -364,19 +358,17 @@ class TestModIO(unittest.TestCase):
 
         m = M()
         with self.assertRaises(pyrtl.PyrtlError) as ex:
-            w = pyrtl.WireVector(2)
+            w = pyrtl.WireVector(2, 'w')
             w <<= m.i
         self.assertEqual(
             str(ex.exception),
-            "Invalid module. Module input i/2W can only "
-            "be used on the rhs of <<= while within a module definition."
+            'Invalid connection (i/2I(m1) -> w/2W).'
         )
 
-    @unittest.skip
     def test_bad_output_assignment_outside_module(self):
         class M(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super().__init__(name="m1")
 
             def definition(self):
                 i = self.Input(2, 'i')
@@ -386,10 +378,8 @@ class TestModIO(unittest.TestCase):
         m = M()
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m.o <<= 3
-        self.assertEqual(
-            str(ex.exception),
-            "Invalid module. Module output o/4W can only "
-            "be used on the lhs of <<= while within a module definition."
+        self.assertTrue(
+            str(ex.exception).startswith('Invalid connection')
         )
 
     def test_bad_outside_wire_connection_to_module(self):
@@ -487,24 +477,20 @@ class TestNestedModules(unittest.TestCase):
         self.assertIn(self.module.oba_0.s, self.module.oba_0.outputs)
         self.assertIn(self.module.oba_0.cout, self.module.oba_0.outputs)
 
-    @unittest.skip
     def test_bad_assignment_from_submodule_input(self):
         w = pyrtl.WireVector(4)
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             w <<= self.module.oba_0.a
-        self.assertEqual(
-            str(ex.exception),
-            'TODO'
+        self.assertTrue(
+            str(ex.exception).startswith('Invalid connection')
         )
 
-    @unittest.skip
     def test_bad_assignment_to_submodule_output(self):
         w = pyrtl.Const(4)
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             self.module.oba_0.s <<= w
-        self.assertEqual(
-            str(ex.exception),
-            'TODO'
+        self.assertTrue(
+            str(ex.exception).startswith('Invalid connection')
         )
 
     def test_correctness(self):
@@ -586,33 +572,14 @@ class TestDoubleNestedModules(unittest.TestCase):
 
 
 class TestBadNestedModules(unittest.TestCase):
-    # You should only be able to put input into modules that
-    # are immediately accessible (block.modules, or module.submodules
-    # if within a definition.
-    # Likewise, you should only be able to get the output from modules
-    # that immediately accessible.
-    # Sibling modules can also be connected.
-    # -----------------------------------------------------------
-    # | block                                                   |
-    # |    -----------     ------------------------------|      |
-    # |    | module1 |     | module2                     |      |
-    # o<---o         o---> i ------+8------w             |      |
-    # i--->i         |     |   ----------- |   --------  |      |
-    # |    -----------     |   | module3 | \-->i mod4 |  |      |
-    # |                    |   |         |     |      |  |      |
-    # i------------------->i-->i         o---->i      o->o--+7->o
-    # |                    |   -----------     --------  |      |
-    # |                    -------------------------------      |
-    # ----------------------------------------------------------|
 
     def setUp(self):
         pyrtl.reset_working_block()
 
-    @unittest.skip
     def test_bad_assignment_within_nested_to_outside(self):
         class Inner2(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super().__init__(name="i2")
 
             def definition(self):
                 x = self.Input(4, 'x')
@@ -621,7 +588,7 @@ class TestBadNestedModules(unittest.TestCase):
 
         class Inner(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super().__init__(name="i1")
 
             def definition(self):
                 a = self.Input(4, 'a')
@@ -645,7 +612,7 @@ class TestBadNestedModules(unittest.TestCase):
             Outer()
         self.assertEqual(
             str(ex.exception),
-            'TODO'
+            'Invalid connection (a/4I(i1) -> y/4O(i2)).'
         )
 
 
