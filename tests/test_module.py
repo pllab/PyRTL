@@ -52,8 +52,15 @@ class TestBlockAttributes(unittest.TestCase):
 
     def test_no_modules_instantiated(self):
         self.assertEqual(pyrtl.working_block().modules, set())
+        self.assertEqual(pyrtl.working_block().toplevel_modules, set())
+        self.assertEqual(pyrtl.working_block().modules_by_name, {})
+
+    def test_no_current_module(self):
+        self.assertIsNone(pyrtl.working_block().current_module)
 
     def test_several_modules_instantiated(self):
+        tester = self
+
         class M(pyrtl.Module):
             def __init__(self):
                 super().__init__()
@@ -62,6 +69,7 @@ class TestBlockAttributes(unittest.TestCase):
                 a = self.Input(3, name='a')
                 b = self.Output(3, name='b')
                 b <<= a
+                tester.assertEqual(self.block.current_module, self)
 
         m1 = M()
         m2 = M()
@@ -70,6 +78,8 @@ class TestBlockAttributes(unittest.TestCase):
         self.assertEqual(set(pyrtl.working_block().modules), {m1, m2})
 
     def test_several_named_modules_instantiated(self):
+        tester = self
+
         class A(pyrtl.Module):
             def __init__(self, name):
                 super().__init__(name)
@@ -78,6 +88,7 @@ class TestBlockAttributes(unittest.TestCase):
                 a = self.Input(3, 'a')
                 b = self.Output(3, 'b')
                 b <<= a
+                tester.assertEqual(self.block.current_module, self)
 
         a1 = A('a1')
         a2 = A('a2')
@@ -298,15 +309,9 @@ class TestSimpleModule(unittest.TestCase):
             wio = block.get_wirevector_by_name(w._original_name)
             self.assertTrue(isinstance(wio, pyrtl.Output))
 
-    @unittest.skip
     def test_wires_have_module_attribute(self):
-        # starting from inputs, trace all wires
-        # connected to them through to the outputs,
-        # and check they all have the correct module annotation.
-        # care must be taken for submodules...what is the property we
-        # are tracking there, because we must allow wires of different
-        # modules to be connected, if it's to a submodule....
-        pass
+        for wire in self.module.wires:
+            self.assertTrue(wire.module == self.module)
 
     def test_correctness(self):
         a = pyrtl.Input(1, 'a')

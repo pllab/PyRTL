@@ -264,7 +264,7 @@ class Block(object):
         # module- and sort-related:
         self.modules_by_name = {}  # map from name to modules in the block
         self.module_sorts = {}  # map from module class name -> (map from io.original_name -> sort)
-        self.current_module = []  # a stack of current modules, so everyone knows owner :(
+        self._current_module_stack = []  # a stack of current modules, so everyone knows owner :(
 
     def __str__(self):
         """String form has one LogicNet per line."""
@@ -385,6 +385,13 @@ class Block(object):
     @property
     def toplevel_modules(self):
         return set(module for module in self.modules if module.supermodule is None)
+
+    @property
+    def current_module(self):
+        if self._current_module_stack:
+            return self._current_module_stack[-1]
+        else:
+            return None
 
     def sanity_check_module(self, module):
         # Unique module name

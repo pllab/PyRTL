@@ -119,8 +119,8 @@ class WireVector(object):
 
         # Each module tracks which wires belong to it
         if self._block.current_module:
-            self._block.current_module[-1].add_wire(self)
-            self.module = self._block.current_module[-1]
+            self.module = self._block.current_module
+            self.module.add_wire(self)
 
         if core._setting_keep_wirevector_call_stack:
             import traceback

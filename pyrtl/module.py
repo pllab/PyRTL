@@ -52,9 +52,9 @@ class Module(ABC):
 
     def _definition(self):
         self._register_if_submodule()
-        self.block.current_module.append(self)
+        self.block._current_module_stack.append(self)
         self.definition()
-        self.block.current_module.pop()
+        self.block._current_module_stack.pop()
 
     @abstractmethod
     def definition(self):
@@ -78,7 +78,7 @@ class Module(ABC):
 
     def _register_if_submodule(self):
         if self.block.current_module:
-            self.supermodule = self.block.current_module[-1]
+            self.supermodule = self.block.current_module
             self.supermodule.submodules.add(self)
             self.supermodule.submodules_by_name[self.name] = self
 
@@ -142,11 +142,6 @@ class Module(ABC):
                     'Wire %s is not owned by module %s but is present in its wire set'
                     % (str(wire), self.name)
                 )
-
-        # All non-io wires we own are only connected to our own ModInputs/ModOutputs
-        # TODO I could just do a check in the assignment of wires...
-        # for wire in self.wires:
-        #     if not insinstance(wire, _ModIO):
 
     def __str__(self):
         """ Print out the wire sorts for each input and output """
