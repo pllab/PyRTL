@@ -262,9 +262,9 @@ class Block(object):
         self.rtl_assert_dict = {}   # map from wirevectors -> exceptions, used by rtl_assert
         self.memblock_by_name = {}  # map from name->memblock, for easy access to memblock objs
         # module- and sort-related:
-        self.modules_by_name = {}  # map from name to modules in the block
-        self.module_sorts = {}  # map from module class name -> (map from io.original_name -> sort)
-        self._current_module_stack = []  # a stack of current modules, so everyone knows owner :(
+        self.modules_by_name = {}  # map from name to modules (implies they must have unique names)
+        self.module_sorts = {}  # map from module class name -> {map from io.original_name -> sort}
+        self._current_module_stack = []  # a stack of current modules, so everyone knows owner
 
     def __str__(self):
         """String form has one LogicNet per line."""

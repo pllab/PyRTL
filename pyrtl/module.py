@@ -28,6 +28,8 @@ def next_mod_name(name=""):
             'Starting a module name with "%s" is reserved for internal use.'
             % _modIndexer.internal_prefix
         )
+    # TODO there *may* be an issue if they name a module "Top" after converting
+    # the working block to a module.
     else:
         return name
 
@@ -110,9 +112,6 @@ class Module(ABC):
                 '"%s" is not a top-level module (is a submodule of "%s").'
                 % (self.name, self.supermodule)
             )
-        # Instead of replacing the wire, which would break the invariant
-        # that you can only connect to a module's internal wires via the module's input/output,
-        # create a new block Input/Output by the same name and connect!
         for w in self.inputs:
             w.to_block_input()
         for w in self.outputs:
@@ -186,14 +185,16 @@ class Module(ABC):
         else:
             inputs = [str(i) for i in self.inputs]
             outputs = [str(o) for o in self.outputs]
+            submodules = [m.name for m in self.submodules]
             raise AttributeError(
-                'Cannot get non-IO wirevector "%s" from module.\n'
+                'Cannot get non-IO wirevector/submodule "%s" from module "%s".\n'
                 'Make sure you spelled the wire name correctly, '
                 'that you used "self.Input" and "self.Output" rather than '
                 '"pyrtl.Input" and "pyrtl.Output" to declare the IO wirevectors, '
                 'and that you are accessing it from the correct module.\n'
-                'Available input wires are %s and output wires are %s.' %
-                (name, str(inputs), str(outputs)))
+                'Available input wires are %s and output wires are %s.\n'
+                'Available submodules are %s.' %
+                (name, self.name, str(inputs), str(outputs), str(submodules)))
 
 
 def module_from_block(block=None):  # , timing_out=None):
@@ -231,6 +232,8 @@ def module_from_block(block=None):  # , timing_out=None):
         assert not mod.supermodule
         if mod is not m:
             mod.supermodule = m
+            m.submodules.add(mod)
+            m.submodules_by_name[mod.name] = mod
 
     # Convert the inputs and outputs!
     for wire in block.wirevector_subset(Input):
@@ -272,6 +275,10 @@ class _ModInput(_ModIO):
 
     def to_block_input(self, name=""):
         """ Access this wire via a block Input """
+        # Instead of replacing the wire, which would break the invariant
+        # that you can only connect to a module's internal wires via the module's input/output,
+        # in addition to the invariant that pyrtl.Outputs cannot be arguments to nets (which
+        # _ModOutputs can be), create a new block Input/Output by the same name and connect!
         name = name if name else self._original_name
         w = Input(len(self), name=name, block=self.module.block)
         self <<= w
@@ -282,6 +289,7 @@ class _ModOutput(_ModIO):
 
     def to_block_output(self, name=""):
         """ Access this wire via a block Output """
+        # See notes in `to_block_input`
         name = name if name else self._original_name
         w = Output(len(self), name=name, block=self.module.block)
         w <<= self

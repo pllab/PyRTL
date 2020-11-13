@@ -21,10 +21,10 @@ class OneBitAdder(pyrtl.Module):
 
 
 class NBitAdder(pyrtl.Module):
-    def __init__(self, n):
+    def __init__(self, n, name=""):
         assert (n > 0)
         self.n = n
-        super().__init__()
+        super().__init__(name=name)
 
     def definition(self):
         a = self.Input(self.n, 'a')
@@ -142,7 +142,7 @@ class TestBadModule(unittest.TestCase):
                 super().__init__()
 
             def definition(self):
-                b = pyrtl.Const(4)
+                _ = pyrtl.Const(4)
 
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             M()
@@ -206,12 +206,13 @@ class TestBadModule(unittest.TestCase):
             a.x
         self.assertEqual(
             str(ex.exception),
-            'Cannot get non-IO wirevector "x" from module.\n'
+            'Cannot get non-IO wirevector/submodule "x" from module "m1".\n'
             'Make sure you spelled the wire name correctly, '
             'that you used "self.Input" and "self.Output" rather than '
             '"pyrtl.Input" and "pyrtl.Output" to declare the IO wirevectors, '
             'and that you are accessing it from the correct module.\n'
-            'Available input wires are [] and output wires are [\'o/4O(m1)\'].'
+            'Available input wires are [] and output wires are [\'o/4O(m1)\'].\n'
+            'Available submodules are [].'
         )
 
     def test_unconnected_inputs(self):
@@ -719,7 +720,11 @@ class TestModuleImport(unittest.TestCase):
         r.next <<= f + 2
         d <<= r
 
+        self.assertIsNone(pyrtl.working_block().current_module)
         m = pyrtl.module_from_block()
+        self.assertIsNone(pyrtl.working_block().current_module)
+        self.assertEqual(pyrtl.working_block().toplevel_modules, {m})
+        self.assertEqual(pyrtl.working_block().modules, {m})
         self.assertEqual(m.a._original_name, 'a')
         self.assertEqual(m.b._original_name, 'b')
         self.assertEqual(m.c._original_name, 'c')
@@ -746,6 +751,61 @@ class TestModuleImport(unittest.TestCase):
             output.getvalue(),
             "a 1462\nb 0321\nc 113153\nd 0260\n"
         )
+
+    def test_module_from_working_block_with_submodles(self):
+        # Test all manner of submodule access
+        nba = NBitAdder(6, "nba")
+        ai = pyrtl.Input(6, 'ai')
+        bi = pyrtl.Input(6, 'bi')
+        so = pyrtl.Output(6, 'so')
+        nba.a <<= ai
+        nba.b <<= bi
+        nba.cin <<= 0
+        so <<= nba.s
+
+        self.assertIsNone(pyrtl.working_block().current_module)
+        m = pyrtl.module_from_block()
+        self.assertIsNone(pyrtl.working_block().current_module)
+        self.assertEqual(pyrtl.working_block().toplevel_modules, {m})
+        self.assertEqual(
+            pyrtl.working_block().modules,
+            {m, nba, nba.oba_0, nba.oba_1, nba.oba_2, nba.oba_3, nba.oba_4, nba.oba_5}
+        )
+        self.assertEqual(m.ai._original_name, 'ai')
+        self.assertEqual(m.bi._original_name, 'bi')
+        self.assertEqual(m.so._original_name, 'so')
+
+        self.assertEqual(m.nba.a._original_name, 'a')
+        self.assertEqual(m.nba.b._original_name, 'b')
+        self.assertEqual(m.nba.cin._original_name, 'cin')
+        self.assertEqual(m.nba.s._original_name, 's')
+        self.assertEqual(m.nba.cout._original_name, 'cout')
+
+        self.assertEqual(m.submodules, {nba})
+        self.assertEqual(nba.supermodule, m)
+        self.assertEqual(
+            m.nba.submodules,
+            {nba.oba_0, nba.oba_1, nba.oba_2, nba.oba_3, nba.oba_4, nba.oba_5}
+        )
+        self.assertEqual(m.nba.oba_0.supermodule, m.nba)
+        self.assertEqual(m.nba.oba_1.supermodule, m.nba)
+        self.assertEqual(m.nba.oba_2.supermodule, m.nba)
+        self.assertEqual(m.nba.oba_3.supermodule, m.nba)
+        self.assertEqual(m.nba.oba_4.supermodule, m.nba)
+        self.assertEqual(m.nba.oba_5.supermodule, m.nba)
+
+        for oba in m.nba.submodules:
+            self.assertTrue(isinstance(oba.a, pyrtl.module._ModInput))
+            self.assertTrue(isinstance(oba.b, pyrtl.module._ModInput))
+            self.assertTrue(isinstance(oba.cin, pyrtl.module._ModInput))
+            self.assertTrue(isinstance(oba.s, pyrtl.module._ModOutput))
+            self.assertTrue(isinstance(oba.cout, pyrtl.module._ModOutput))
+
+# TODO should we allow a module's inputs/outputs to remain
+# unconnected to the outside world?
+# TODO if I can get this working, I'll probably be
+# able to import BLIFs with submodules (TODO add as a test
+# case in test_inputoutput.py)
 
 
 if __name__ == "__main__":
