@@ -252,7 +252,7 @@ def _build_intramodular_reachability_maps(module):
                 continue
             if isinstance(d, _ModOutput):
                 # Enforces that we stay within the module
-                # assert d.module == module  # TODO why not passing?
+                # assert d.module == module  # TODO why not passing? sibling or submodules?
                 continue
 
             for dst_net in dst_nets:

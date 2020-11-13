@@ -490,6 +490,64 @@ class TestNestedModules(unittest.TestCase):
         )
 
 
+class TestDoubleNestedModules(unittest.TestCase):
+
+    def setUp(self):
+        pyrtl.reset_working_block()
+
+    def test_current_module_stack(self):
+        tester = self
+
+        class Inner2(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                x = self.Input(4, 'x')
+                y = self.Output(4, 'y')
+                y <<= x - 1
+                tester.assertEqual(self.block.current_module, self)
+                tester.assertEqual(
+                    self.block._current_module_stack,
+                    [self.supermodule.supermodule, self.supermodule, self]
+                )
+
+        class Inner(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                a = self.Input(4, 'a')
+                b = self.Output(8, 'b')
+                m = Inner2()
+                m.x <<= a
+                b <<= (m.y + 10) * 2
+                tester.assertEqual(self.block.current_module, self)
+                tester.assertEqual(
+                    self.block._current_module_stack,
+                    [self.supermodule, self]
+                )
+
+        class Outer(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                a = self.Input(32, 'a')
+                b = self.Output(32, 'b')
+                in1 = Inner()
+                in1.a <<= a + 1
+                b <<= in1.b
+                tester.assertEqual(self.block.current_module, self)
+                tester.assertEqual(
+                    self.block._current_module_stack,
+                    [self]
+                )
+
+        m = Outer()  # Has assertions within the modules
+        self.assertIsNone(m.block.current_module)
+
+
 class TestBadNestedModules(unittest.TestCase):
     # You should only be able to put input into modules that
     # are immediately accessible (block.modules, or module.submodules
