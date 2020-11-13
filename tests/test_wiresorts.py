@@ -72,9 +72,9 @@ class TestMultipleIntraModules(unittest.TestCase):
             super().__init__(name=name)
 
         def definition(self):
-            a = self.Input(4, 'a')
-            b = self.Output(6, 'b')
-            r = pyrtl.Register(5, 'r')
+            a = self.Input(10, 'a')
+            b = self.Output(10, 'b')
+            r = pyrtl.Register(10, 'r')
             r.next <<= a + 1
             b <<= r * 4
 
@@ -100,8 +100,34 @@ class TestMultipleIntraModules(unittest.TestCase):
         self.assertEqual(m.a.sort.needed_by_set, {m.b})
         self.assertEqual(m.b.sort.depends_on_set, {m.a})
 
+    def test_simple_connected_to_self_no_loop(self):
+        n = TestMultipleIntraModules.N()
+        n.a <<= n.b
+        out = pyrtl.Output(10, 'out')
+        out <<= n.b
+
+        sim = pyrtl.Simulation()
+        sim.step_multiple({}, nsteps=5)
+        output = six.StringIO()
+        sim.tracer.print_trace(output, compact=True)
+        self.assertEqual(output.getvalue(), "out 042084340\n  r 0152185\n")
+
+    def test_three_connected_simple_no_cycle_because_state(self):
+        n1 = TestMultipleIntraModules.N(name="n1")
+        n2 = TestMultipleIntraModules.N(name="n2")
+        n3 = TestMultipleIntraModules.N(name="n3")
+        n2.a <<= n1.b
+        n3.a <<= n2.b
+        n1.a <<= n3.b
+
+        self.assertTrue(isinstance(n1.a.sort, pyrtl.wiresorts.Free))
+        self.assertEqual(n1.a.sort.needed_by_set, set())
+        self.assertTrue(isinstance(n1.b.sort, pyrtl.wiresorts.Giving))
+        self.assertFalse(n1.b.sort.depends_on_set, set())
+
+    # TODO continue from here, adding in my previous intra-checks
+    @unittest.skip
     def test_three_connected_simple_cycle_no_state(self):
-        # TODO continue from here, adding in my previous intra-checks
         m1 = TestMultipleIntraModules.M()
         m2 = TestMultipleIntraModules.M()
         m3 = TestMultipleIntraModules.M()
@@ -111,7 +137,34 @@ class TestMultipleIntraModules(unittest.TestCase):
             m1.a <<= m3.b
         self.assertTrue(str(ex.exception).startswith("Connection error!"))
 
-    # TODO possibly add the reachability tests
+    def test_ill_connected_to_self_loop(self):
+        m = TestMultipleIntraModules.M()
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            m.a <<= m.b
+        self.assertTrue(str(ex.exception).startswith("Connection error!"))
+
+    def test_ill_connected_transitive_normal_intermediate_wire(self):
+        m = TestMultipleIntraModules.M()
+
+        x = m.b * 2
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            m.a <<= x
+        self.assertTrue(str(ex.exception).startswith("Connection error!"))
+
+    def test_loop_after_many_steps(self):
+        """ Tests the scenario where you connect module input to
+            something (say X), then connect module output to something
+            else (say Y), and then later connect X to Y.
+        """
+
+        m = TestMultipleIntraModules.M()
+        w1 = pyrtl.WireVector(4)
+        m.a <<= w1
+        w2 = m.b * 2
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            w1 <<= w2
+        self.assertTrue(str(ex.exception).startswith("Connection error!"))
 
 
 class TestNestedModules(unittest.TestCase):
@@ -172,6 +225,81 @@ class TestNestedModules(unittest.TestCase):
             self.assertTrue(oba.s.sort.depends_on_set, {oba.a, oba.b, oba.cin})
             self.assertTrue(isinstance(oba.cout.sort, pyrtl.wiresorts.Dependent))
             self.assertTrue(oba.cout.sort.depends_on_set, {oba.a, oba.b, oba.cin})
+
+    def test_nested_connection_with_state(self):
+        class Inner(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                x = self.Input(6, 'x')
+                r = pyrtl.Register(6)
+                r.next <<= x
+                y = self.Output(7, 'y')
+                y <<= r + 4
+
+        class Outer(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = self.Input(6, 'i')
+                o = self.Output(7, 'o_foo')
+                b = Inner()
+                b.x <<= i
+                o <<= b.y
+
+        inner_mod = Inner()
+        self.assertTrue(isinstance(inner_mod.x.sort, pyrtl.wiresorts.Free))
+        self.assertEqual(inner_mod.x.sort.needed_by_set, set())
+        self.assertTrue(isinstance(inner_mod.y.sort, pyrtl.wiresorts.Giving))
+        self.assertEqual(inner_mod.y.sort.depends_on_set, set())
+        outer_mod = Outer()
+        self.assertTrue(isinstance(outer_mod.i.sort, pyrtl.wiresorts.Free))
+        self.assertEqual(outer_mod.i.sort.needed_by_set, set())
+        self.assertTrue(isinstance(outer_mod.o.sort, pyrtl.wiresorts.Giving))
+        self.assertEqual(outer_mod.o.sort.depends_on_set, set())
+
+    def test_nested_connection_with_state2(self):
+        class Inner(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                w = self.Input(1, 'w')
+                x = self.Input(6, 'x')
+                r = pyrtl.Register(6)
+                r.next <<= x
+                y = self.Output(7, 'y')
+                y <<= r + 4 + w
+
+        class Outer(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = self.Input(6, 'i')
+                j = self.Input(1, 'j')
+                o = self.Output(7, 'o')
+                b = Inner()
+                b.x <<= i
+                b.w <<= j
+                o <<= b.y
+
+        inner_mod = Inner()
+        self.assertTrue(isinstance(inner_mod.x.sort, pyrtl.wiresorts.Free))
+        self.assertEqual(inner_mod.x.sort.needed_by_set, set())
+        self.assertTrue(isinstance(inner_mod.w.sort, pyrtl.wiresorts.Needed))
+        self.assertEqual(inner_mod.w.sort.needed_by_set, {inner_mod.y})
+        self.assertTrue(isinstance(inner_mod.y.sort, pyrtl.wiresorts.Dependent))
+        self.assertEqual(inner_mod.y.sort.depends_on_set, {inner_mod.w})
+        outer_mod = Outer()
+        self.assertTrue(isinstance(outer_mod.i.sort, pyrtl.wiresorts.Free))
+        self.assertEqual(outer_mod.i.sort.needed_by_set, set())
+        self.assertTrue(isinstance(outer_mod.j.sort, pyrtl.wiresorts.Needed))
+        self.assertEqual(outer_mod.j.sort.depends_on_set, {outer_mod.o})
+        self.assertTrue(isinstance(outer_mod.o.sort, pyrtl.wiresorts.Dependent))
+        self.assertEqual(outer_mod.o.sort.depends_on_set, {outer_mod.j})
 
 
 if __name__ == "__main__":
