@@ -768,17 +768,19 @@ class Block(object):
                     elif isinstance(dest, _ModOutput):  # In -> Out
                         if arg.module != dest.module:
                             fail(arg, dest)
-                    elif arg.module != dest.module:  # In -> Wire
-                        fail(arg, dest)
+                    else:  # In -> Wire
+                        if arg.module != dest.module:
+                            fail(arg, dest)
                 elif isinstance(arg, _ModOutput):
-                    if isinstance(dest, _ModOutput):  # Out -> Out
+                    if isinstance(dest, _ModOutput):  # Out -> Out (incl. to internal)
                         if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
                             fail(arg, dest)
                     elif isinstance(dest, _ModInput):  # Out -> In
                         if arg.module.supermodule != dest.module.supermodule:
                             fail(arg, dest)
-                    elif arg.module.supermodule != dest.module:  # Out -> Wire
-                        fail(arg, dest)
+                    else:  # Out -> Wire (incl. to internal)
+                        if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
+                            fail(arg, dest)
                 elif isinstance(arg, WireVector):
                     if isinstance(dest, _ModInput):  # Wire -> In
                         if arg.module != dest.module.supermodule:
@@ -786,8 +788,9 @@ class Block(object):
                     elif isinstance(dest, _ModOutput):  # Wire -> Out
                         if arg.module != dest.module:
                             fail(arg, dest)
-                    elif arg.module != dest.module:  # Wire -> Wire
-                        fail(arg, dest)
+                    else:  # Wire -> Wire
+                        if arg.module != dest.module:
+                            fail(arg, dest)
 
 
 class PostSynthBlock(Block):
