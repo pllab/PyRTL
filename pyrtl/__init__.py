@@ -22,6 +22,7 @@ from .wire import Bundle
 
 # module
 from .module import Module
+from .module import module_from_block
 
 # wire sorts
 from .wiresorts import Free, Needed

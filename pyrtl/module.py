@@ -34,7 +34,16 @@ def next_mod_name(name=""):
 
 class Module(ABC):
 
-    def __init__(self, name="", block=None):
+    def __init__(self, name="", block=None, _checks=True):
+        """ Create a module, which represents the encapsulation of logic
+            behind strict input/output wires. The hardware to be elaborated
+            must be defined by the concrete class via the 'definition' function.
+
+            :param name: Name to give this module
+            :param block: Block to which the module belongs
+            :param _checks: (Quick and dirty way to avoid doing the sanity checks and
+                             annotation; meant for internal use only) TODO remove!
+        """
         self.inputs = set()
         self.outputs = set()
         self.submodules = set()
@@ -42,18 +51,22 @@ class Module(ABC):
         self.outputs_by_name = {}  # map from output.original_name to wire (for perfomance)
         self.submodules_by_name = {}  # map from submodule.name to submodule (for performance)
         self.supermodule = None
+        self._in_definition = False
         self.wires = set()
         self.name = next_mod_name(name)
         self.block = working_block(block)
         self.block._add_module(self)
         self._definition()
-        self.sanity_check()
-        annotate_module(self)
+        if _checks:
+            self.sanity_check()
+            annotate_module(self)
 
     def _definition(self):
         self._register_if_submodule()
         self.block._current_module_stack.append(self)
+        self._in_definition = True
         self.definition()
+        self._in_definition = False
         self.block._current_module_stack.pop()
 
     @abstractmethod
@@ -65,12 +78,16 @@ class Module(ABC):
         pass
 
     def Input(self, bitwidth, name):
+        if not self._in_definition:
+            raise PyrtlError("Cannot create a module input outside of the module's definition")
         w = _ModInput(bitwidth, name, self)
         self.inputs.add(w)
         self.inputs_by_name[w._original_name] = w
         return w
 
     def Output(self, bitwidth, name):
+        if not self._in_definition:
+            raise PyrtlError("Cannot create a module output outside of the module's definition")
         w = _ModOutput(bitwidth, name, self)
         self.outputs.add(w)
         self.outputs_by_name[w._original_name] = w
@@ -89,7 +106,7 @@ class Module(ABC):
         """ Sets this module's input/output wires as the current block's I/O """
         if self.supermodule:
             raise PyrtlError(
-                'Can only promote the io wires of top-level modules to block io.'
+                'Can only promote the io wires of top-level modules to block io. '
                 '"%s" is not a top-level module (is a submodule of "%s").'
                 % (self.name, self.supermodule)
             )
@@ -179,6 +196,60 @@ class Module(ABC):
                 (name, str(inputs), str(outputs)))
 
 
+def module_from_block(block=None):  # , timing_out=None):
+    """ Convert a given block into a module. Its inputs and outputs become
+        the module's inputs/outputs. All existing modules become
+        submodules of this new toplevel module.
+
+        I believe that due to the way we have checks occurring in
+        sanity_check_net(), the block will only be valid at this point if they
+        already hold, which is good. Now we're going to create this
+        module object inside-out, as it were. It's an ugly process and could
+        probably be improved.
+    """
+    block = working_block(block)
+
+    class Top(Module):
+        def __init__(self):
+            # Ignore complaints from the sanity check; we'll do it later
+            super().__init__(name="Top", block=block, _checks=False)
+
+        def definition(self):
+            pass
+    m = Top()
+    m._in_definition = True
+    m.block._current_module_stack.append(m)
+
+    # For all top-level wires (i.e. not already in an existing module),
+    # set their owning module to this one
+    for wire in block.wirevector_set:
+        if not wire.module:
+            wire.module = m
+
+    # All existing top-level modules now have the new module as their supermodule
+    for mod in block.toplevel_modules:
+        assert not mod.supermodule
+        if mod is not m:
+            mod.supermodule = m
+
+    # Convert the inputs and outputs!
+    for wire in block.wirevector_subset(Input):
+        minput = m.Input(wire.bitwidth, wire.name)
+        replace_wire(wire, minput, minput, minput.module.block)
+    for wire in block.wirevector_subset(Output):
+        moutput = m.Output(wire.bitwidth, wire.name)
+        replace_wire(wire, moutput, moutput, moutput.module.block)
+
+    m._in_definition = False
+    m.block._current_module_stack.pop()
+
+    m.sanity_check()
+    # ts = time.perf_counter()
+    annotate_module(m)
+    # te = time.perf_counter()
+    return m  # , te - ts
+
+
 class _ModIO(WireVector):
     def __init__(self, bitwidth, name, module):
         """ We purposefully hide the original name so that multiple instantiations of the same
@@ -200,7 +271,7 @@ class _ModInput(_ModIO):
     _code = "I"
 
     def to_block_input(self, name=""):
-        """ Make this wire a block Input wire """
+        """ Access this wire via a block Input """
         name = name if name else self._original_name
         w = Input(len(self), name=name, block=self.module.block)
         self <<= w
@@ -210,7 +281,7 @@ class _ModOutput(_ModIO):
     _code = "O"
 
     def to_block_output(self, name=""):
-        """ Make this wire a block Output wire """
+        """ Access this wire via a block Output """
         name = name if name else self._original_name
         w = Output(len(self), name=name, block=self.module.block)
         w <<= self

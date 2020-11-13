@@ -422,6 +422,31 @@ class TestModIO(unittest.TestCase):
             'Invaid connection (o/40(m1) -> '
         )
 
+    def test_no_modification_outside_definition(self):
+        class A(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                a = self.Input(3, 'a')
+                b = self.Output(3, 'b')
+                b <<= a
+
+        a = A()
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            _c = a.Input(5, 'c')
+        self.assertEqual(
+            str(ex.exception),
+            "Cannot create a module input outside of the module's definition"
+        )
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            _c = a.Output(5, 'c')
+        self.assertEqual(
+            str(ex.exception),
+            "Cannot create a module output outside of the module's definition"
+        )
+
     def test_original_names(self):
         self.assertEqual(self.module.a._original_name, 'a')
         self.assertEqual(self.module.b._original_name, 'b')
@@ -445,6 +470,67 @@ class TestModIO(unittest.TestCase):
         for w in self.module.outputs:
             wio = block.get_wirevector_by_name(w._original_name)
             self.assertTrue(isinstance(wio, pyrtl.Output))
+
+
+class TestDuplicateModules(unittest.TestCase):
+
+    def setUp(self):
+        pyrtl.reset_working_block()
+
+    def test_connect_duplicate_modules_bad(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = self.Input(2, 'i')
+                o = self.Output(3, 'o')
+                o <<= i + 1
+
+        m1 = M()
+        m2 = M()
+        m1.i.to_block_input()
+        m2.i.to_block_input()
+        m1.o.to_block_output()
+        m2.o.to_block_output()
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            _ = pyrtl.Simulation()
+        self.assertTrue(str(ex.exception).startswith(
+            "Duplicate wire names found for the following different signals"))
+
+    def test_connect_duplicate_modules_good(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                i = self.Input(2, 'i')
+                o = self.Output(3, 'o')
+                o <<= i + 1
+
+        m1 = M()
+        m2 = M()
+        m1.i.to_block_input('m1_i')
+        m2.i.to_block_input('m2_i')
+        m1.o.to_block_output('m1_o')
+        m2.o.to_block_output('m2_o')
+
+        sim = pyrtl.Simulation()
+        inputs = {
+            'm1_i': [1, 2, 3, 0, 1],
+            'm2_i': [0, 0, 1, 1, 2],
+        }
+        outputs = {
+            'm1_o': [2, 3, 4, 1, 2],
+            'm2_o': [1, 1, 2, 2, 3],
+        }
+        sim.step_multiple(inputs, outputs)
+        output = six.StringIO()
+        sim.tracer.print_trace(output, compact=True)
+        self.assertEqual(
+            output.getvalue(),
+            "m1_i 12301\nm1_o 23412\nm2_i 00112\nm2_o 11223\n"
+        )
 
 
 class TestNestedModules(unittest.TestCase):
@@ -613,6 +699,52 @@ class TestBadNestedModules(unittest.TestCase):
         self.assertEqual(
             str(ex.exception),
             'Invalid connection (a/4I(i1) -> y/4O(i2)).'
+        )
+
+
+class TestModuleImport(unittest.TestCase):
+
+    def setUp(self):
+        pyrtl.reset_working_block()
+
+    def test_module_from_working_block(self):
+        a = pyrtl.Input(3, 'a')
+        b = pyrtl.Input(4, 'b')
+        c = pyrtl.Output(4, 'c')
+        d = pyrtl.Output(3, 'd')
+        r = pyrtl.Register(3)
+        e = a * b
+        f = e | (a & b)
+        c <<= f + 1
+        r.next <<= f + 2
+        d <<= r
+
+        m = pyrtl.module_from_block()
+        self.assertEqual(m.a._original_name, 'a')
+        self.assertEqual(m.b._original_name, 'b')
+        self.assertEqual(m.c._original_name, 'c')
+        self.assertEqual(m.d._original_name, 'd')
+        self.assertTrue(isinstance(m.a, pyrtl.module._ModInput))
+        self.assertTrue(isinstance(m.b, pyrtl.module._ModInput))
+        self.assertTrue(isinstance(m.c, pyrtl.module._ModOutput))
+        self.assertTrue(isinstance(m.d, pyrtl.module._ModOutput))
+
+        m.to_block_io()
+        sim = pyrtl.Simulation()
+        inputs = {
+            'a': [1, 4, 6, 2],
+            'b': [0, 3, 2, 1],
+        }
+        outputs = {
+            'c': [1, 13, 15, 3],
+            'd': [0, 2, 6, 0],
+        }
+        sim.step_multiple(inputs, outputs)
+        output = six.StringIO()
+        sim.tracer.print_trace(output, compact=True)
+        self.assertEqual(
+            output.getvalue(),
+            "a 1462\nb 0321\nc 113153\nd 0260\n"
         )
 
 
