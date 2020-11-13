@@ -751,6 +751,44 @@ class Block(object):
         if net.op == '@' and net.dests != ():
             raise PyrtlInternalError('error, mem write dest should be empty tuple')
 
+        # For each pair of (arg, dest) in the net, check if modular isolation is preserved
+        # TODO probably need to verify memory's module is valid too...
+        from .module import _ModInput, _ModOutput
+        from .wire import WireVector
+
+        def fail(arg, dest):
+            raise PyrtlError('Invalid connection (%s -> %s).' % (str(arg), str(dest)))
+
+        for arg in net.args:
+            for dest in net.dests:
+                if isinstance(arg, _ModInput):
+                    if isinstance(dest, _ModInput):  # In -> In
+                        if dest.module.supermodule != arg.module:
+                            fail(arg, dest)
+                    elif isinstance(dest, _ModOutput):  # In -> Out
+                        if arg.module != dest.module:
+                            fail(arg, dest)
+                    elif arg.module != dest.module:  # In -> Wire
+                        fail(arg, dest)
+                elif isinstance(arg, _ModOutput):
+                    if isinstance(dest, _ModOutput):  # Out -> Out
+                        if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
+                            fail(arg, dest)
+                    elif isinstance(dest, _ModInput):  # Out -> In
+                        if arg.module.supermodule != dest.module.supermodule:
+                            fail(arg, dest)
+                    elif arg.module.supermodule != dest.module:  # Out -> Wire
+                        fail(arg, dest)
+                elif isinstance(arg, WireVector):
+                    if isinstance(dest, _ModInput):  # Wire -> In
+                        if arg.module != dest.module.supermodule:
+                            fail(arg, dest)
+                    elif isinstance(dest, _ModOutput):  # Wire -> Out
+                        if arg.module != dest.module:
+                            fail(arg, dest)
+                    elif arg.module != dest.module:  # Wire -> Wire
+                        fail(arg, dest)
+
 
 class PostSynthBlock(Block):
     """ This is a block with extra metadata required to maintain the

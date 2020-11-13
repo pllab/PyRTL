@@ -142,9 +142,7 @@ class TestBadModule(unittest.TestCase):
                 super().__init__()
 
             def definition(self):
-                a = self.Input(3, 'a')
                 b = pyrtl.Const(4)
-                a <<= 2 + b
 
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             M()
@@ -278,8 +276,7 @@ class TestBadModule(unittest.TestCase):
             M('m1')
         self.assertEqual(
             str(ex.exception),
-            'Invalid module. Module input "i/2I(m1)" cannot be '
-            'used as a destination to a net within a module definition.'
+            'Invalid connection (const_0_3/2C -> i/2I(m1)).'
         )
 
 
@@ -393,6 +390,46 @@ class TestModIO(unittest.TestCase):
             str(ex.exception),
             "Invalid module. Module output o/4W can only "
             "be used on the lhs of <<= while within a module definition."
+        )
+
+    def test_bad_outside_wire_connection_to_module(self):
+        _ = pyrtl.WireVector(4, 'w')
+
+        class M(pyrtl.Module):
+            def __init__(self, name):
+                super().__init__(name=name)
+
+            def definition(self):
+                o = self.Output(4, 'o')
+                o <<= self.block.wirevector_by_name['w']
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            M('m1')
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid connection (w/4W -> o/4O(m1)).'
+        )
+
+    # TODO This *shouldn't* be legal (but currently is)
+    # because it's an assignment to an outside wire while in the definition
+    @unittest.skip
+    def test_bad_output_as_arg_to_outside_module(self):
+        _ = pyrtl.WireVector(4, 'w')
+
+        class M(pyrtl.Module):
+            def __init__(self, name):
+                super().__init__(name=name)
+
+            def definition(self):
+                o = self.Output(4, 'o')
+                self.block.wirevector_by_name['w'] <<= o
+                o <<= 4
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            M('m1')
+        self.assertEqual(
+            str(ex.exception),
+            'Invaid connection (o/40(m1) -> '
         )
 
     def test_original_names(self):
@@ -517,7 +554,7 @@ class TestDoubleNestedModules(unittest.TestCase):
                 super().__init__()
 
             def definition(self):
-                a = self.Input(4, 'a')
+                a = self.Input(5, 'a')
                 b = self.Output(8, 'b')
                 m = Inner2()
                 m.x <<= a

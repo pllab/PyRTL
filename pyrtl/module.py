@@ -87,6 +87,15 @@ class Module(ABC):
 
     def to_block_io(self):
         """ Sets this module's input/output wires as the current block's I/O """
+        if self.supermodule:
+            raise PyrtlError(
+                'Can only promote the io wires of top-level modules to block io.'
+                '"%s" is not a top-level module (is a submodule of "%s").'
+                % (self.name, self.supermodule)
+            )
+        # Instead of replacing the wire, which would break the invariant
+        # that you can only connect to a module's internal wires via the module's input/output,
+        # create a new block Input/Output by the same name and connect!
         for w in self.inputs:
             w.to_block_input()
         for w in self.outputs:
@@ -111,24 +120,17 @@ class Module(ABC):
 
         src_dict, dest_dict = self.block.net_connections()
 
-        # All _ModInput and _ModOutput wires have been connected to some internal module logic.
+        # All _ModInput and _ModOutput wires have been connected
         for wire in self.inputs:
             if wire not in dest_dict:
                 raise PyrtlError('Invalid module. Input "%s" is not connected '
                                  'to any internal module logic.' % str(wire))
+
+        # All _ModOutput wires have been connected
         for wire in self.outputs:
             if wire not in src_dict:
                 raise PyrtlError('Invalid module. Output "%s" is not connected '
                                  'to any internal module logic.' % str(wire))
-
-        # This _ModInputs aren't used as destinations to nets within module
-        for wire in self.inputs:
-            if wire in src_dict:
-                raise PyrtlError(
-                    'Invalid module. Module input "%s" cannot be '
-                    'used as a destination to a net within a module definition.'
-                    % str(wire)
-                )
 
         # Only track wires we own
         for wire in self.wires:
@@ -201,10 +203,7 @@ class _ModInput(_ModIO):
         """ Make this wire a block Input wire """
         name = name if name else self._original_name
         w = Input(len(self), name=name, block=self.module.block)
-        replace_wire(self, w, w, self.module.block)
-        # At this point, `self` has been removed from the block,
-        # but is present in `self.module.inputs`
-        self.module.block.add_wirevector(w)
+        self <<= w
 
 
 class _ModOutput(_ModIO):
@@ -214,7 +213,4 @@ class _ModOutput(_ModIO):
         """ Make this wire a block Output wire """
         name = name if name else self._original_name
         w = Output(len(self), name=name, block=self.module.block)
-        replace_wire(self, w, w, self.module.block)
-        # At this point, `self` has been removed from the block,
-        # but is present in `self.module.outputs`
-        self.module.block.add_wirevector(w)
+        w <<= self
