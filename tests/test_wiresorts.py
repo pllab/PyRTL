@@ -144,8 +144,7 @@ class TestNestedModules(unittest.TestCase):
 
             ss = []
             for i in range(self.n):
-                # oba = OneBitAdder()
-                oba = self.submod(TestNestedModules.OneBitAdder())
+                oba = TestNestedModules.OneBitAdder()
                 oba.a <<= a[i]
                 oba.b <<= b[i]
                 oba.cin <<= cin

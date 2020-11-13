@@ -117,6 +117,11 @@ class WireVector(object):
         self.name = next_tempvar_name(name)
         self._validate_bitwidth(bitwidth)
 
+        # Each module tracks which wires belong to it
+        if self._block.current_module:
+            self._block.current_module[-1].add_wire(self)
+            self.module = self._block.current_module[-1]
+
         if core._setting_keep_wirevector_call_stack:
             import traceback
             self.init_call_stack = traceback.format_stack()

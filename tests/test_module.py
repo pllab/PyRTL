@@ -35,8 +35,7 @@ class NBitAdder(pyrtl.Module):
 
         ss = []
         for i in range(self.n):
-            # oba = OneBitAdder()  # Doing this is legal, but won't register it with the supermodule
-            oba = self.submod(OneBitAdder(name="oba_" + str(i)))
+            oba = OneBitAdder(name="oba_" + str(i))
             oba.a <<= a[i]
             oba.b <<= b[i]
             oba.cin <<= cin
@@ -434,18 +433,18 @@ class TestNestedModules(unittest.TestCase):
         self.assertEqual(self.module.oba_1.supermodule, self.module)
         self.assertEqual(self.module.oba_2.supermodule, self.module)
         self.assertEqual(self.module.oba_3.supermodule, self.module)
-    
+
     def test_all_submodules_have_different_names(self):
         names = set(mod.name for mod in self.module.submodules)
         self.assertEqual(len(names), 4)
-    
+
     def test_access_submodule_io(self):
         self.assertIn(self.module.oba_0.a, self.module.oba_0.inputs)
         self.assertIn(self.module.oba_0.b, self.module.oba_0.inputs)
         self.assertIn(self.module.oba_0.cin, self.module.oba_0.inputs)
         self.assertIn(self.module.oba_0.s, self.module.oba_0.outputs)
         self.assertIn(self.module.oba_0.cout, self.module.oba_0.outputs)
-    
+
     @unittest.skip
     def test_bad_assignment_from_submodule_input(self):
         w = pyrtl.WireVector(4)
@@ -455,7 +454,7 @@ class TestNestedModules(unittest.TestCase):
             str(ex.exception),
             'TODO'
         )
-    
+
     @unittest.skip
     def test_bad_assignment_to_submodule_output(self):
         w = pyrtl.Const(4)
@@ -485,6 +484,7 @@ class TestNestedModules(unittest.TestCase):
             "   a 01238\n   b 146912\n cin 00000\ncout 00001\n   s 158124\n"
         )
 
+
 class TestBadNestedModules(unittest.TestCase):
     # You should only be able to put input into modules that
     # are immediately accessible (block.modules, or module.submodules
@@ -513,7 +513,7 @@ class TestBadNestedModules(unittest.TestCase):
         class Inner2(pyrtl.Module):
             def __init__(self):
                 super().__init__()
-            
+
             def definition(self):
                 x = self.Input(4, 'x')
                 y = self.Output(4, 'y')
@@ -522,7 +522,7 @@ class TestBadNestedModules(unittest.TestCase):
         class Inner(pyrtl.Module):
             def __init__(self):
                 super().__init__()
-            
+
             def definition(self):
                 a = self.Input(4, 'a')
                 b = self.Output(8, 'b')
@@ -540,13 +540,14 @@ class TestBadNestedModules(unittest.TestCase):
                 in1 = Inner()
                 in1.a <<= a + 1
                 b <<= in1.b
-        
+
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             Outer()
         self.assertEqual(
             str(ex.exception),
             'TODO'
         )
+
 
 if __name__ == "__main__":
     unittest.main()

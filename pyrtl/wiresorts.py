@@ -201,10 +201,6 @@ def _build_intramodular_reachability_maps(module):
             seen.add(a)
             _verbose_print("checking " + str(a))
 
-            # TODO check when this assertion should hold
-            # if module and hasattr(a, 'module'):
-            #     assert a.module == module
-
             # Registers break the combinational chain
             if isinstance(a, Register):
                 continue
@@ -225,6 +221,7 @@ def _build_intramodular_reachability_maps(module):
                 raise PyrtlError("memwrites should not have a destination wire")
             if isinstance(a, _ModInput):
                 # Enforces that we stay within the module
+                # assert a.module == module # TODO why not passing?!
                 continue
 
             work_list.extend(src_net.args)
@@ -241,10 +238,6 @@ def _build_intramodular_reachability_maps(module):
             seen.add(d)
             _verbose_print(f"checking {str(d)}")
 
-            # TODO check when this assertion should hold
-            # if module and hasattr(d, 'module'):
-            #     assert d.module == module
-
             if d is not input:
                 if d not in depends_on:
                     depends_on[d] = {input}
@@ -259,6 +252,7 @@ def _build_intramodular_reachability_maps(module):
                 continue
             if isinstance(d, _ModOutput):
                 # Enforces that we stay within the module
+                # assert d.module == module  # TODO why not passing?
                 continue
 
             for dst_net in dst_nets:

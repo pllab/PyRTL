@@ -7,7 +7,7 @@ import six
 from .core import working_block, reset_working_block, _NameIndexer
 from .corecircuits import as_wires, concat_list
 from .memory import MemBlock
-from .pyrtlexceptions import PyrtlError
+from .pyrtlexceptions import PyrtlError, PyrtlInternalError
 from .transform import replace_wire
 from .wire import WireVector, Register, Input, Output
 from .wiresorts import annotate_module
@@ -20,12 +20,9 @@ def _reset_module_indexer():
     _modIndexer = _NameIndexer(_modIndexer.internal_prefix)
 
 
-def next_mod_name():
-    return _modIndexer.make_valid_string()
-
 def next_mod_name(name=""):
     if name == "":
-       return _modIndexer.make_valid_string()
+        return _modIndexer.make_valid_string()
     elif name.startswith(_modIndexer.internal_prefix):
         raise PyrtlError(
             'Starting a module name with "%s" is reserved for internal use.'
@@ -45,12 +42,19 @@ class Module(ABC):
         self.outputs_by_name = {}  # map from output.original_name to wire (for perfomance)
         self.submodules_by_name = {}  # map from submodule.name to submodule (for performance)
         self.supermodule = None
+        self.wires = set()
         self.name = next_mod_name(name)
         self.block = working_block(block)
         self.block._add_module(self)
-        self.definition()
+        self._definition()
         self.sanity_check()
         annotate_module(self)
+
+    def _definition(self):
+        self._register_if_submodule()
+        self.block.current_module.append(self)
+        self.definition()
+        self.block.current_module.pop()
 
     @abstractmethod
     def definition(self):
@@ -72,18 +76,14 @@ class Module(ABC):
         self.outputs_by_name[w._original_name] = w
         return w
 
-    def submod(self, mod):
-        """ Register the module 'mod' as a submodule of this one """
-        # TODO I'm not sure if I love this approach
-        mod.supermodule = self
-        self.submodules.add(mod)
-        self.submodules_by_name[mod.name] = mod
-        return mod
+    def _register_if_submodule(self):
+        if self.block.current_module:
+            self.supermodule = self.block.current_module[-1]
+            self.supermodule.submodules.add(self)
+            self.supermodule.submodules_by_name[self.name] = self
 
-    def wires(self):
-        """ Get all wires contained in this module (except those included in submodules) """
-        # TODO or change it to a 'logic' function that returns nets within this module?
-        pass
+    def add_wire(self, wire):
+        self.wires.add(wire)
 
     def to_block_io(self):
         """ Sets this module's input/output wires as the current block's I/O """
@@ -130,9 +130,23 @@ class Module(ABC):
                     % str(wire)
                 )
 
-        # Check that all internal wires are encapsulated,
-        # meaning they don't directly connect to any wires defined outside the module.
-        # TODO
+        # Only track wires we own
+        for wire in self.wires:
+            if not hasattr(wire, 'module'):
+                raise PyrtlInternalError(
+                    'Wire "%s" does not have a "module" attribute.'
+                    % str(wire)
+                )
+            if wire.module != self:
+                raise PyrtlError(
+                    'Wire %s is not owned by module %s but is present in its wire set'
+                    % (str(wire), self.name)
+                )
+
+        # All non-io wires we own are only connected to our own ModInputs/ModOutputs
+        # TODO I could just do a check in the assignment of wires...
+        # for wire in self.wires:
+        #     if not insinstance(wire, _ModIO):
 
     def __str__(self):
         """ Print out the wire sorts for each input and output """
@@ -178,7 +192,7 @@ class _ModIO(WireVector):
             raise PyrtlError("Must supply a non-empty name for a module's input/output wire")
         self._original_name = name
         self.sort = None
-        self.module = module
+        self.module = module  # TODO this probably isn't needed now with it done in wire.__init__()
         super().__init__(bitwidth)
 
     def __str__(self):

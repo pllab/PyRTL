@@ -264,9 +264,7 @@ class Block(object):
         # module- and sort-related:
         self.modules_by_name = {}  # map from name to modules in the block
         self.module_sorts = {}  # map from module class name -> (map from io.original_name -> sort)
-        # TODO I'd prefer to avoid needing to do the following, in that it becomes like a context
-        # have this stack of current_modules that get pushed/popped in nested instantiations...
-        # self.current_module = []  # a stack of current modules, so wires/submodules know owner
+        self.current_module = []  # a stack of current modules, so everyone knows owner :(
 
     def __str__(self):
         """String form has one LogicNet per line."""
@@ -383,6 +381,10 @@ class Block(object):
     @property
     def modules(self):
         return set(self.modules_by_name.values())
+
+    @property
+    def toplevel_modules(self):
+        return set(module for module in self.modules if module.supermodule is None)
 
     def sanity_check_module(self, module):
         # Unique module name
