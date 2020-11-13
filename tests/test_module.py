@@ -7,8 +7,8 @@ import pyrtl
 
 
 class OneBitAdder(pyrtl.Module):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name=""):
+        super().__init__(name=name)
 
     def definition(self):
         a = self.Input(1, 'a')
@@ -36,7 +36,7 @@ class NBitAdder(pyrtl.Module):
         ss = []
         for i in range(self.n):
             # oba = OneBitAdder()  # Doing this is legal, but won't register it with the supermodule
-            oba = self.submod(OneBitAdder())
+            oba = self.submod(OneBitAdder(name="oba_" + str(i)))
             oba.a <<= a[i]
             oba.b <<= b[i]
             oba.cin <<= cin
@@ -253,29 +253,6 @@ class TestBadModule(unittest.TestCase):
             print(m.i.name)
         self.assertEqual(str(ex.exception), "'inputs_by_name'")
 
-    # TODO I don't think this is necessarily bad
-    @unittest.skip
-    def test_bad_output_as_arg(self):
-        class A(pyrtl.Module):
-            def __init__(self, name):
-                super().__init__(name=name)
-
-            def definition(self):
-                a = self.Input(3, 'a')
-                b = self.Input(4, 'b')
-                c = self.Output(4, 'c')
-                d = self.Output(3, 'd')
-                c <<= a + 1
-                d <<= c + b - 2
-
-        with self.assertRaises(pyrtl.PyrtlError) as ex:
-            A('m1')
-        self.assertEqual(
-            str(ex.exception),
-            'Invalid module. Module output "c/4O(m1)" cannot be '
-            'used as a source to a net within a module definition.'
-        )
-
     def test_bad_input_as_dest(self):
         class M(pyrtl.Module):
             def __init__(self, name):
@@ -322,6 +299,7 @@ class TestSimpleModule(unittest.TestCase):
             wio = block.get_wirevector_by_name(w._original_name)
             self.assertTrue(isinstance(wio, pyrtl.Output))
 
+    @unittest.skip
     def test_wires_have_module_attribute(self):
         # starting from inputs, trace all wires
         # connected to them through to the outputs,
@@ -367,7 +345,7 @@ class TestModIO(unittest.TestCase):
         pyrtl.reset_working_block()
         self.module = OneBitAdder()
 
-    def test_cannot_create_outside_definition(self):
+    def test_cannot_create_module_wires_outside_definition(self):
         # TODO either check the current module in the block,
         # or check if we're within the module's definition via the 'in_definition' flag...
         pass
@@ -445,7 +423,48 @@ class TestNestedModules(unittest.TestCase):
         self.module = NBitAdder(4)
 
     def test_access_submodules(self):
-        pass
+        self.assertEqual(len(self.module.submodules), 4)
+
+        self.assertIn(self.module.oba_0, self.module.submodules)
+        self.assertIn(self.module.oba_1, self.module.submodules)
+        self.assertIn(self.module.oba_2, self.module.submodules)
+        self.assertIn(self.module.oba_3, self.module.submodules)
+
+        self.assertEqual(self.module.oba_0.supermodule, self.module)
+        self.assertEqual(self.module.oba_1.supermodule, self.module)
+        self.assertEqual(self.module.oba_2.supermodule, self.module)
+        self.assertEqual(self.module.oba_3.supermodule, self.module)
+    
+    def test_all_submodules_have_different_names(self):
+        names = set(mod.name for mod in self.module.submodules)
+        self.assertEqual(len(names), 4)
+    
+    def test_access_submodule_io(self):
+        self.assertIn(self.module.oba_0.a, self.module.oba_0.inputs)
+        self.assertIn(self.module.oba_0.b, self.module.oba_0.inputs)
+        self.assertIn(self.module.oba_0.cin, self.module.oba_0.inputs)
+        self.assertIn(self.module.oba_0.s, self.module.oba_0.outputs)
+        self.assertIn(self.module.oba_0.cout, self.module.oba_0.outputs)
+    
+    @unittest.skip
+    def test_bad_assignment_from_submodule_input(self):
+        w = pyrtl.WireVector(4)
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            w <<= self.module.oba_0.a
+        self.assertEqual(
+            str(ex.exception),
+            'TODO'
+        )
+    
+    @unittest.skip
+    def test_bad_assignment_to_submodule_output(self):
+        w = pyrtl.Const(4)
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            self.module.oba_0.s <<= w
+        self.assertEqual(
+            str(ex.exception),
+            'TODO'
+        )
 
     def test_correctness(self):
         self.module.to_block_io()
@@ -466,6 +485,68 @@ class TestNestedModules(unittest.TestCase):
             "   a 01238\n   b 146912\n cin 00000\ncout 00001\n   s 158124\n"
         )
 
+class TestBadNestedModules(unittest.TestCase):
+    # You should only be able to put input into modules that
+    # are immediately accessible (block.modules, or module.submodules
+    # if within a definition.
+    # Likewise, you should only be able to get the output from modules
+    # that immediately accessible.
+    # Sibling modules can also be connected.
+    # -----------------------------------------------------------
+    # | block                                                   |
+    # |    -----------     ------------------------------|      |
+    # |    | module1 |     | module2                     |      |
+    # o<---o         o---> i ------+8------w             |      |
+    # i--->i         |     |   ----------- |   --------  |      |
+    # |    -----------     |   | module3 | \-->i mod4 |  |      |
+    # |                    |   |         |     |      |  |      |
+    # i------------------->i-->i         o---->i      o->o--+7->o
+    # |                    |   -----------     --------  |      |
+    # |                    -------------------------------      |
+    # ----------------------------------------------------------|
+
+    def setUp(self):
+        pyrtl.reset_working_block()
+
+    @unittest.skip
+    def test_bad_assignment_within_nested_to_outside(self):
+        class Inner2(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            
+            def definition(self):
+                x = self.Input(4, 'x')
+                y = self.Output(4, 'y')
+                y <<= x - 1
+
+        class Inner(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+            
+            def definition(self):
+                a = self.Input(4, 'a')
+                b = self.Output(8, 'b')
+                m = Inner2()
+                m.y <<= a  # This should be the problem caught
+                b <<= (m.y + 10) * 2
+
+        class Outer(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                a = self.Input(32, 'a')
+                b = self.Output(32, 'b')
+                in1 = Inner()
+                in1.a <<= a + 1
+                b <<= in1.b
+        
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            Outer()
+        self.assertEqual(
+            str(ex.exception),
+            'TODO'
+        )
 
 if __name__ == "__main__":
     unittest.main()

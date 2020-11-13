@@ -20,9 +20,12 @@ def _reset_module_indexer():
     _modIndexer = _NameIndexer(_modIndexer.internal_prefix)
 
 
+def next_mod_name():
+    return _modIndexer.make_valid_string()
+
 def next_mod_name(name=""):
     if name == "":
-        return _modIndexer.make_valid_string()
+       return _modIndexer.make_valid_string()
     elif name.startswith(_modIndexer.internal_prefix):
         raise PyrtlError(
             'Starting a module name with "%s" is reserved for internal use.'
@@ -37,9 +40,10 @@ class Module(ABC):
     def __init__(self, name="", block=None):
         self.inputs = set()
         self.outputs = set()
+        self.submodules = set()
         self.inputs_by_name = {}  # map from input.original_name to wire (for performance)
         self.outputs_by_name = {}  # map from output.original_name to wire (for perfomance)
-        self.submodules = set()
+        self.submodules_by_name = {}  # map from submodule.name to submodule (for performance)
         self.supermodule = None
         self.name = next_mod_name(name)
         self.block = working_block(block)
@@ -71,8 +75,9 @@ class Module(ABC):
     def submod(self, mod):
         """ Register the module 'mod' as a submodule of this one """
         # TODO I'm not sure if I love this approach
-        self.submodules.add(mod)
         mod.supermodule = self
+        self.submodules.add(mod)
+        self.submodules_by_name[mod.name] = mod
         return mod
 
     def wires(self):
@@ -125,16 +130,6 @@ class Module(ABC):
                     % str(wire)
                 )
 
-        # This _ModOutputs aren't used as arguments to nets within module,
-        # (I don't think this is necessary actually).
-        # for wire in self.outputs:
-        #     if wire in dest_dict:
-        #         raise PyrtlError(
-        #             'Invalid module. Module output "%s" cannot be '
-        #             'used as an argument to a net within a module definition.'
-        #             % str(wire)
-        #         )
-
         # Check that all internal wires are encapsulated,
         # meaning they don't directly connect to any wires defined outside the module.
         # TODO
@@ -151,10 +146,15 @@ class Module(ABC):
         return s
 
     def __getattr__(self, name):
+        """ You can access a module's input/output wires like 'module.wire_original_name'.
+            You can also access a module's submodules like 'module.submodule_name'.
+        """
         if name in self.__dict__['inputs_by_name']:
             return self.__dict__['inputs_by_name'][name]
         elif name in self.__dict__['outputs_by_name']:
             return self.__dict__['outputs_by_name'][name]
+        elif name in self.__dict__['submodules_by_name']:
+            return self.__dict__['submodules_by_name'][name]
         else:
             inputs = [str(i) for i in self.inputs]
             outputs = [str(o) for o in self.outputs]
@@ -170,6 +170,10 @@ class Module(ABC):
 
 class _ModIO(WireVector):
     def __init__(self, bitwidth, name, module):
+        """ We purposefully hide the original name so that multiple instantiations of the same
+            module with named wires don't conflict. You access these wires via module.wire_name,
+            where wire_name is the wire's original_name given in the initializer here.
+        """
         if not name:
             raise PyrtlError("Must supply a non-empty name for a module's input/output wire")
         self._original_name = name

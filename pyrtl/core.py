@@ -375,6 +375,7 @@ class Block(object):
 
         Note that this is done automatically when a module is
         created and isn't intended for use by PyRTL end users.
+        This is intended to only store the top-level modules.
         """
         self.sanity_check_module(module)
         self.modules_by_name[module.name] = module
