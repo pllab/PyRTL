@@ -60,7 +60,7 @@ class Module(ABC):
         self.block._add_module(self)
         self._definition()
         if _checks:
-            self.sanity_check()
+            self.validity_check()
             annotate_module(self)
 
     def _definition(self):
@@ -117,7 +117,7 @@ class Module(ABC):
         for w in self.outputs:
             w.to_block_output()
 
-    def sanity_check(self):
+    def validity_check(self):
         # At least one _ModOutput
         if not self.outputs:
             raise PyrtlError("Module must have at least one output.")
@@ -202,8 +202,8 @@ def module_from_block(block=None):  # , timing_out=None):
         the module's inputs/outputs. All existing modules become
         submodules of this new toplevel module.
 
-        I believe that due to the way we have checks occurring in
-        sanity_check_net(), the block will only be valid at this point if they
+        I believe that due to the way we have checks occurring when nets
+        are added, the block will only be valid at this point if they
         already hold, which is good. Now we're going to create this
         module object inside-out, as it were. It's an ugly process and could
         probably be improved.
@@ -246,7 +246,7 @@ def module_from_block(block=None):  # , timing_out=None):
     m._in_definition = False
     m.block._current_module_stack.pop()
 
-    m.sanity_check()
+    m.validity_check()
     # ts = time.perf_counter()
     annotate_module(m)
     # te = time.perf_counter()
