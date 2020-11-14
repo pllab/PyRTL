@@ -178,12 +178,20 @@ def _build_intramodular_reachability_maps(module):
         The advantage of this is that annotating each module input/output
         only requires traversing the module once at the beginning to build these maps,
         rather than for each io.
+
+        The intention of this is purely for intramodular dependency calculation;
+        checks for valid intermodular connections is done in is_well_connected_module
+        (which uses the _build_intermodular_reachability_maps).
     """
     from .module import _ModInput, _ModOutput
 
-    # map from wire to the outputs it affects, combinationally
+    # map from any wire to the outputs it affects, combinationally;
+    # we track every wire's affected output for effiency during
+    # traversal, but by the end we'll just return a map whose keys are just *input*
     needed_by = {}
-    # map from wire to the inputs it depends on, combinationally
+
+    # map from *output* to the inputs it depends on, combinationally;
+    # this is calculated using needed_by for efficiency.
     depends_on = {}
 
     block = module.block
@@ -225,10 +233,7 @@ def _build_intramodular_reachability_maps(module):
                         work_list.extend(src_map[affector].args)
             else:
                 if a is not output:  # For simplicity, we added the initial output to the work list
-                    if a not in needed_by:
-                        needed_by[a] = {output}
-                    else:
-                        needed_by[a].add(output)
+                    needed_by.setdefault(a, set()).add(output)
                 if a not in src_map:
                     continue
                 src_net = src_map[a]
@@ -238,9 +243,7 @@ def _build_intramodular_reachability_maps(module):
                     continue
                 if src_net.op == '@':
                     raise PyrtlError("memwrites should not have a destination wire")
-                if isinstance(a, _ModInput):
-                    # Enforces that we stay within the module
-                    # assert a.module == module # TODO why not passing?!
+                if isinstance(a, _ModInput):  # Stay within the module
                     continue
 
                 work_list.extend(src_net.args)
@@ -258,10 +261,7 @@ def _build_intramodular_reachability_maps(module):
             _verbose_print(f"checking {str(d)}")
 
             if d is not input:
-                if d not in depends_on:
-                    depends_on[d] = {input}
-                else:
-                    depends_on[d].add(input)
+                depends_on.setdefault(d, set()).add(input)
             if d not in dst_map:
                 continue
             dst_nets = dst_map[d]
@@ -269,9 +269,7 @@ def _build_intramodular_reachability_maps(module):
             # Registers break the combinational chain
             if isinstance(d, Register):
                 continue
-            if isinstance(d, _ModOutput):
-                # Enforces that we stay within the module
-                # assert d.module == module  # TODO why not passing? sibling or submodules?
+            if isinstance(d, _ModOutput):  # Stay within the module
                 continue
 
             for dst_net in dst_nets:
