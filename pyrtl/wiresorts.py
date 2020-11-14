@@ -4,7 +4,7 @@
 
 import abc
 
-from .pyrtlexceptions import PyrtlError
+from .pyrtlexceptions import PyrtlError, PyrtlInternalError
 from .core import working_block
 from .wire import Register
 
@@ -205,26 +205,45 @@ def _build_intramodular_reachability_maps(module):
             if isinstance(a, Register):
                 continue
 
-            if a is not output:
-                if a not in needed_by:
-                    needed_by[a] = {output}
-                else:
-                    needed_by[a].add(output)
-            if a not in src_map:
-                continue
-            src_net = src_map[a]
-            assert src_net.dests[0] is a
+            if a.module != output.module:
+                # Skip over the submodule by going backwards to its inputs
+                if not isinstance(a, _ModOutput):
+                    raise PyrtlInternalError(
+                        'The sanity checks should have detected this invalid '
+                        'connection originating from "%s.%s" in module "%s" by now.'
+                        % (a.module.name, a.name, output.module.name)
+                    )
+                if not a.sort:
+                    raise PyrtlInternalError(
+                        'All submodules should be annotated before attempting to '
+                        'annotate their supermodule. Here, submodule "%s" in "%s" '
+                        'is not yet annotated.' % (a.module.name, output.module.name)
+                    )
+                assert isinstance(a.sort, OutputSort)
+                for affector in a.sort.depends_on_set:
+                    if affector in src_map:
+                        work_list.extend(src_map[affector].args)
+            else:
+                if a is not output:  # For simplicity, we added the initial output to the work list
+                    if a not in needed_by:
+                        needed_by[a] = {output}
+                    else:
+                        needed_by[a].add(output)
+                if a not in src_map:
+                    continue
+                src_net = src_map[a]
+                assert src_net.dests[0] is a
 
-            if src_net.op == 'm' and not src_net.op_param[1].asynchronous:
-                continue
-            if src_net.op == '@':
-                raise PyrtlError("memwrites should not have a destination wire")
-            if isinstance(a, _ModInput):
-                # Enforces that we stay within the module
-                # assert a.module == module # TODO why not passing?!
-                continue
+                if src_net.op == 'm' and not src_net.op_param[1].asynchronous:
+                    continue
+                if src_net.op == '@':
+                    raise PyrtlError("memwrites should not have a destination wire")
+                if isinstance(a, _ModInput):
+                    # Enforces that we stay within the module
+                    # assert a.module == module # TODO why not passing?!
+                    continue
 
-            work_list.extend(src_net.args)
+                work_list.extend(src_net.args)
 
     for input in module.inputs:
         _verbose_print(f"Input {str(input)}")
