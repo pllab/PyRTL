@@ -125,8 +125,6 @@ class TestMultipleIntraModules(unittest.TestCase):
         self.assertTrue(isinstance(n1.b.sort, pyrtl.wiresorts.Giving))
         self.assertFalse(n1.b.sort.depends_on_set, set())
 
-    # TODO continue from here, adding in my previous intra-checks
-    @unittest.skip
     def test_three_connected_simple_cycle_no_state(self):
         m1 = TestMultipleIntraModules.M()
         m2 = TestMultipleIntraModules.M()
@@ -135,14 +133,14 @@ class TestMultipleIntraModules(unittest.TestCase):
         m3.a <<= m2.b
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m1.a <<= m3.b
-        self.assertTrue(str(ex.exception).startswith("Connection error!"))
+        self.assertTrue(str(ex.exception).startswith("Connection error"))
 
     def test_ill_connected_to_self_loop(self):
         m = TestMultipleIntraModules.M()
 
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m.a <<= m.b
-        self.assertTrue(str(ex.exception).startswith("Connection error!"))
+        self.assertTrue(str(ex.exception).startswith("Connection error"))
 
     def test_ill_connected_transitive_normal_intermediate_wire(self):
         m = TestMultipleIntraModules.M()
@@ -150,7 +148,7 @@ class TestMultipleIntraModules(unittest.TestCase):
         x = m.b * 2
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m.a <<= x
-        self.assertTrue(str(ex.exception).startswith("Connection error!"))
+        self.assertTrue(str(ex.exception).startswith("Connection error"))
 
     def test_loop_after_many_steps(self):
         """ Tests the scenario where you connect module input to
@@ -164,7 +162,7 @@ class TestMultipleIntraModules(unittest.TestCase):
         w2 = m.b * 2
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             w1 <<= w2
-        self.assertTrue(str(ex.exception).startswith("Connection error!"))
+        self.assertTrue(str(ex.exception).startswith("Connection error"))
 
 
 class TestNestedModulesNBitAdder(unittest.TestCase):

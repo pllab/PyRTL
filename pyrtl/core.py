@@ -406,6 +406,10 @@ class Block(object):
         from .wire import WireVector
         from .wiresorts import find_bad_connection_in_block
 
+        # If this design has no modules whatsoever, just skip!
+        if not net.args[0]._block.modules:
+            return
+
         def fail(arg, dest):
             raise PyrtlError('Invalid connection (%s -> %s).' % (str(arg), str(dest)))
 
@@ -451,19 +455,25 @@ class Block(object):
         # so don't check those. Similarish reasoning for wire to submodule wire connections.
         def are_from_sibling_modules(w, x):
             return (
-                w.module
-                and x.module
-                and (w.module != x.module)
-                and (w.module.supermodule == x.module.supermodule)
+                (not w.module and not x.module)
+                or (
+                    w.module
+                    and x.module
+                    and (w.module != x.module)
+                    and (w.module.supermodule == x.module.supermodule)
+                )
             )
 
         for arg, dest in connections:
             if are_from_sibling_modules(arg, dest):
-                bad_conn = find_bad_connection_in_block(arg.module.block)
+                # TODO I'm wondering if I could just call `find_bad_connection_from_module` instead
+                bad_conn = find_bad_connection_in_block(
+                    arg._block  # not arg.module.block in case arg/dest aren't part of a module
+                )
                 if bad_conn:
                     (output, input) = bad_conn
                     raise PyrtlError(
-                        'ill-connection between "%s" (in "%s") and "%s" (in "%s"), '
+                        'Connection error between "%s" (in "%s") and "%s" (in "%s"), '
                         'caused by addition of net "%s".'
                         % (str(output), output.module.name,
                            str(input), input.module.name, str(net))
