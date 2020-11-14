@@ -448,28 +448,16 @@ class Block(object):
                     if arg.module != dest.module:
                         fail(arg, dest)
 
-        # We know this individual connection is fine. Now see if it completes
-        # an intermodular sibling connection, and if so, if that causes
-        # a block-level malconnection. Reasoning: connections between a wire w and another y
-        # its supermodule will mean that y's sortedness hasn't yet been determined,
-        # so don't check those. Similarish reasoning for wire to submodule wire connections.
-        def are_from_sibling_modules(w, x):
-            return (
-                (not w.module and not x.module)
-                or (
-                    w.module
-                    and x.module
-                    and (w.module != x.module)
-                    and (w.module.supermodule == x.module.supermodule)
-                )
-            )
+        def creates_an_intermodular_connection(w, x):
+            # TODO implement by returning all the modules comb.-connected to x if so
+            # then call `find_bad_connection_from_module` for each of them below...
+            return True
 
+        # We know this individual connection is fine. Now see if it completes
+        # an intermodular connection, and if so, if that causes a block-level malconnection.
         for arg, dest in connections:
-            if are_from_sibling_modules(arg, dest):
-                # TODO I'm wondering if I could just call `find_bad_connection_from_module` instead
-                bad_conn = find_bad_connection_in_block(
-                    arg._block  # not arg.module.block in case arg/dest aren't part of a module
-                )
+            if creates_an_intermodular_connection(arg, dest):
+                bad_conn = find_bad_connection_in_block(arg._block)  # arg might not be in a module
                 if bad_conn:
                     (output, input) = bad_conn
                     raise PyrtlError(

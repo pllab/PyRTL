@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import math
 import six
 
-from .core import working_block, reset_working_block, _NameIndexer
+from .core import working_block, reset_working_block, _NameIndexer, LogicNet
 from .corecircuits import as_wires, concat_list
 from .memory import MemBlock
 from .pyrtlexceptions import PyrtlError, PyrtlInternalError
@@ -223,6 +223,7 @@ def module_from_block(block=None):  # , timing_out=None):
 
     # For all top-level wires (i.e. not already in an existing module),
     # set their owning module to this one
+    # TODO this is an expensive thing to do; is there a way around it?
     for wire in block.wirevector_set:
         if not wire.module:
             wire.module = m
@@ -236,12 +237,31 @@ def module_from_block(block=None):  # , timing_out=None):
             m.submodules_by_name[mod.name] = mod
 
     # Convert the inputs and outputs!
-    for wire in block.wirevector_subset(Input):
-        minput = m.Input(wire.bitwidth, wire.name)
-        replace_wire(wire, minput, minput, minput.module.block)
-    for wire in block.wirevector_subset(Output):
-        moutput = m.Output(wire.bitwidth, wire.name)
-        replace_wire(wire, moutput, moutput, moutput.module.block)
+    # Don't want to call replace_wire() because it eventually calls block.add_net,
+    # which is where our modular_check_net occurs, and we're not in a good state for that yet.
+    # We're doing almost the same thing as replace_wire() minus that one call.
+    src_map, dst_map = block.net_connections()
+    for orig_wire in block.wirevector_subset(Input):
+        minput = m.Input(orig_wire.bitwidth, orig_wire.name)
+        nets = dst_map[orig_wire]
+        for net in nets:
+            new_net = LogicNet(
+                op=net.op, op_param=net.op_param, dests=net.dests,
+                args=tuple(minput if w is orig_wire else w for w in net.args))
+            block.sanity_check_net(new_net)
+            block.logic.add(new_net)
+            block.logic.remove(net)
+        block.remove_wirevector(orig_wire)
+    for orig_wire in block.wirevector_subset(Output):
+        moutput = m.Output(orig_wire.bitwidth, orig_wire.name)
+        net = src_map[orig_wire]
+        new_net = LogicNet(
+            op=net.op, op_param=net.op_param, args=net.args,
+            dests=tuple(moutput if w is orig_wire else w for w in net.dests))
+        block.sanity_check_net(new_net)
+        block.logic.add(new_net)
+        block.logic.remove(net)
+        block.remove_wirevector(orig_wire)
 
     m._in_definition = False
     m.block._current_module_stack.pop()
@@ -263,7 +283,7 @@ class _ModIO(WireVector):
             raise PyrtlError("Must supply a non-empty name for a module's input/output wire")
         self._original_name = name
         self.sort = None
-        self.module = module  # TODO this probably isn't needed now with it done in wire.__init__()
+        self.module = module
         super().__init__(bitwidth)
 
     def __str__(self):

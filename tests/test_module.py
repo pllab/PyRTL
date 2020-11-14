@@ -401,8 +401,10 @@ class TestModIO(unittest.TestCase):
             'Invalid connection (w/4W -> o/4O(m1)).'
         )
 
-    # TODO This *shouldn't* be legal (but currently is)
-    # because it's an assignment to an outside wire while in the definition
+    # TODO This *should* be illegal (but currently is not)
+    # because it's an assignment to an outside wire while in the definition.
+    # A solution might be to check if we're in the definition of the module
+    # being assigned to something in its supermodule?
     @unittest.skip
     def test_bad_output_as_arg_to_outside_module(self):
         _ = pyrtl.WireVector(4, 'w')
@@ -416,12 +418,8 @@ class TestModIO(unittest.TestCase):
                 self.block.wirevector_by_name['w'] <<= o
                 o <<= 4
 
-        with self.assertRaises(pyrtl.PyrtlError) as ex:
+        with self.assertRaises(pyrtl.PyrtlError):
             M('m1')
-        self.assertEqual(
-            str(ex.exception),
-            'Invaid connection (o/40(m1) -> '
-        )
 
     def test_no_modification_outside_definition(self):
         class A(pyrtl.Module):
@@ -752,7 +750,7 @@ class TestModuleImport(unittest.TestCase):
             "a 1462\nb 0321\nc 113153\nd 0260\n"
         )
 
-    def test_module_from_working_block_with_submodles(self):
+    def test_module_from_working_block_with_submodules(self):
         # Test all manner of submodule access
         nba = NBitAdder(6, "nba")
         ai = pyrtl.Input(6, 'ai')

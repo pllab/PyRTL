@@ -75,24 +75,18 @@ class Dependent(OutputSort):
         return "Dependent (depends on: %s)" % wns
 
 
-# TODO not sure if useful
-# def is_well_connected_block(block=None):
-#     return not find_bad_connection_in_block(block)
-# def is_well_connected_module(module, wires_to_inputs=None):
-#     return not find_bad_connection_from_module(module, wires_to_inputs)
-
-
 def find_bad_connection_in_block(block=None):
     """ Check if all modules in a block are well-connected to one another.
 
         Compute the intermodular reachability once to save some computation hopefully.
+        We *could* accumulate and return all the bad connections instead.
     """
     block = working_block(block)
     wires_to_inputs = _build_intermodular_reachability_maps(block.modules)
     for m in block.modules:
         bad_conn = find_bad_connection_from_module(m, wires_to_inputs)
         if bad_conn:
-            return bad_conn  # TODO could accumulate and return all of them
+            return bad_conn
     return None
 
 
