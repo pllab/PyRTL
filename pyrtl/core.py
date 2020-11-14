@@ -447,6 +447,9 @@ class Block(object):
                 else:  # Wire -> Wire
                     if arg.module != dest.module:
                         fail(arg, dest)
+        
+        # Right now, when importing a module from the working block, there issues
+        # when calling block.net_connections()...WHY???
 
         def creates_an_intermodular_connection(w, x):
             # TODO implement by returning all the modules comb.-connected to x if so

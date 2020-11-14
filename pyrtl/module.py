@@ -32,8 +32,8 @@ def next_mod_name(name=""):
             'Starting a module name with "%s" is reserved for internal use.'
             % _modIndexer.internal_prefix
         )
-    # TODO there *may* be an issue if they name a module "Top" after converting
-    # the working block to a module.
+    elif name == "Top":
+        raise PyrtlError('Module name "Top" is reserved for internal use.')
     else:
         return name
 
@@ -43,15 +43,13 @@ class Module(object):
         of this class.
     """
 
-    def __init__(self, name="", block=None, _checks=True):
+    def __init__(self, name="", block=None):
         """ Create a module, which represents the encapsulation of logic
             behind strict input/output wires. The hardware to be elaborated
             must be defined by the concrete class via the 'definition' function.
 
             :param name: Name to give this module
             :param block: Block to which the module belongs
-            :param _checks: (Quick and dirty way to avoid doing the sanity checks and
-                             annotation; meant for internal use only) TODO remove!
         """
         self.inputs = set()
         self.outputs = set()
@@ -66,9 +64,8 @@ class Module(object):
         self.block = working_block(block)
         self.block._add_module(self)
         self._definition()
-        if _checks:
-            self.validity_check()
-            annotate_module(self)
+        self.validity_check()
+        annotate_module(self)
 
     def _definition(self):
         self._register_if_submodule()
@@ -84,6 +81,68 @@ class Module(object):
             `main` method of the module.
         """
         raise PyrtlError('Module subclasses must supply a `definition` method')
+
+    @classmethod
+    def from_block(cls, block=None):
+        """ Convert a given block into a module. Its inputs and outputs become
+            the module's inputs/outputs. All existing modules become
+            submodules of this new toplevel module.
+
+            I believe that due to the way we have checks occurring when nets
+            are added, the block will only be valid at this point if they
+            already hold, which is good. Now we're going to create this
+            module object inside-out, as it were.
+        """
+        self = cls.__new__(cls)
+        self.inputs = set()
+        self.outputs = set()
+        self.submodules = set()
+        self.inputs_by_name = {}  # map from input.original_name to wire (for performance)
+        self.outputs_by_name = {}  # map from output.original_name to wire (for perfomance)
+        self.submodules_by_name = {}  # map from submodule.name to submodule (for performance)
+        self.supermodule = None
+        self.wires = set()
+        self.name = "Top"
+        self.block = working_block(block)
+        self.block._add_module(self)
+
+        # The rest is essentially our `definition` method,
+        # i.e converting the block's existing logic into this module's
+        self._in_definition = True
+        self.block._current_module_stack.append(self)
+
+        # For all top-level wires (i.e. not already in an existing module),
+        # set their owning module to this one
+        for wire in self.block.wirevector_set:
+            if not wire.module:
+                wire.module = self
+
+        # All existing top-level modules now have the new module as their supermodule
+        for mod in self.block.toplevel_modules:
+            assert not mod.supermodule
+            if mod is not self:
+                mod.supermodule = self
+                self.submodules.add(mod)
+                self.submodules_by_name[mod.name] = mod
+
+        # Convert the inputs and outputs!
+        for orig_wire in self.block.wirevector_subset(Input):
+            minput = self.Input(orig_wire.bitwidth, orig_wire.name)
+            replace_wire(orig_wire, minput, minput, minput.module.block)
+        for orig_wire in self.block.wirevector_subset(Output):
+            moutput = self.Output(orig_wire.bitwidth, orig_wire.name)
+            replace_wire(orig_wire, moutput, moutput, moutput.module.block)
+
+        self.block._current_module_stack.pop()
+        self._in_definition = False
+
+        self.validity_check()
+
+        import time
+        _ts = time.perf_counter()
+        annotate_module(self)
+        _te = time.perf_counter()
+        return self, _te - _ts  # Remove after testing
 
     def Input(self, bitwidth, name):
         if not self._in_definition:
@@ -203,81 +262,8 @@ class Module(object):
                 (name, self.name, str(inputs), str(outputs), str(submodules)))
 
 
-def module_from_block(block=None, timing_out=None):
-    """ Convert a given block into a module. Its inputs and outputs become
-        the module's inputs/outputs. All existing modules become
-        submodules of this new toplevel module.
-
-        I believe that due to the way we have checks occurring when nets
-        are added, the block will only be valid at this point if they
-        already hold, which is good. Now we're going to create this
-        module object inside-out, as it were. It's an ugly process and could
-        probably be improved.
-    """
-    block = working_block(block)
-
-    class Top(Module):
-        def __init__(self):
-            # Ignore complaints from the sanity check; we'll do it later
-            super(Top, self).__init__(name="Top", block=block, _checks=False)
-
-        def definition(self):
-            pass
-    m = Top()
-    m._in_definition = True
-    m.block._current_module_stack.append(m)
-
-    # For all top-level wires (i.e. not already in an existing module),
-    # set their owning module to this one
-    # TODO this is an expensive thing to do; is there a way around it?
-    for wire in block.wirevector_set:
-        if not wire.module:
-            wire.module = m
-
-    # All existing top-level modules now have the new module as their supermodule
-    for mod in block.toplevel_modules:
-        assert not mod.supermodule
-        if mod is not m:
-            mod.supermodule = m
-            m.submodules.add(mod)
-            m.submodules_by_name[mod.name] = mod
-
-    # Convert the inputs and outputs!
-    # Don't want to call replace_wire() because it eventually calls block.add_net,
-    # which is where our modular_check_net occurs, and we're not in a good state for that yet.
-    # We're doing almost the same thing as replace_wire() minus that one call.
-    src_map, dst_map = block.net_connections()
-    for orig_wire in block.wirevector_subset(Input):
-        minput = m.Input(orig_wire.bitwidth, orig_wire.name)
-        nets = dst_map[orig_wire]
-        for net in nets:
-            new_net = LogicNet(
-                op=net.op, op_param=net.op_param, dests=net.dests,
-                args=tuple(minput if w is orig_wire else w for w in net.args))
-            block.sanity_check_net(new_net)
-            block.logic.add(new_net)
-            block.logic.remove(net)
-        block.remove_wirevector(orig_wire)
-    for orig_wire in block.wirevector_subset(Output):
-        moutput = m.Output(orig_wire.bitwidth, orig_wire.name)
-        net = src_map[orig_wire]
-        new_net = LogicNet(
-            op=net.op, op_param=net.op_param, args=net.args,
-            dests=tuple(moutput if w is orig_wire else w for w in net.dests))
-        block.sanity_check_net(new_net)
-        block.logic.add(new_net)
-        block.logic.remove(net)
-        block.remove_wirevector(orig_wire)
-
-    m._in_definition = False
-    m.block._current_module_stack.pop()
-
-    m.validity_check()
-    import time
-    # _ts = time.perf_counter()
-    annotate_module(m)
-    # _te = time.perf_counter()
-    return m  # , _te - _ts  # Remove after testing
+def module_from_block(block=None):
+    return Module.from_block(block)
 
 
 class _ModIO(WireVector):
