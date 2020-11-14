@@ -187,15 +187,16 @@ def _build_intramodular_reachability_maps(module):
 
     # map from any wire to the outputs it affects, combinationally;
     # we track every wire's affected output for effiency during
-    # traversal, but by the end we'll just return a map whose keys are just *input*
-    needed_by = {}
+    # traversal, but by the end we'll just return a map whose keys are just *input*,
+    # so let's make sure the inputs are at least present right now
+    needed_by = {i: set() for i in module.inputs}
 
     # map from *output* to the inputs it depends on, combinationally;
     # this is calculated using needed_by for efficiency.
-    depends_on = {}
+    depends_on = {o: set() for o in module.outputs}
 
     block = module.block
-    src_map, dst_map = block.net_connections()
+    src_map, _ = block.net_connections()
 
     for output in module.outputs:
         _verbose_print("Output " + str(output))
@@ -248,44 +249,14 @@ def _build_intramodular_reachability_maps(module):
 
                 work_list.extend(src_net.args)
 
+    # Just care about needed_by set of the inputs
+    needed_by = {i: s for i, s in needed_by.items() if i in module.inputs}
+
+    # Now create the depends_on map, which is essentially the inverse
     for input in module.inputs:
-        _verbose_print(f"Input {str(input)}")
-        work_list = [input]
-        seen = set()
-
-        while work_list:
-            d = work_list.pop()
-            if d in seen:
-                continue
-            seen.add(d)
-            _verbose_print(f"checking {str(d)}")
-
-            if d is not input:
-                depends_on.setdefault(d, set()).add(input)
-            if d not in dst_map:
-                continue
-            dst_nets = dst_map[d]
-
-            # Registers break the combinational chain
-            if isinstance(d, Register):
-                continue
-            if isinstance(d, _ModOutput):  # Stay within the module
-                continue
-
-            for dst_net in dst_nets:
-                assert any({d is arg for arg in dst_net.args})
-                if dst_net.op == 'm' and not dst_net.op_params[1].asynchronous:
-                    continue
-                if dst_net.op == '@':
-                    continue
-                work_list.append(dst_net.dests[0])
-
-    # Add empty sets for at least the input/output wires that were never reached combinationally
-    for io in module.inputs.union(module.outputs):
-        if io not in needed_by:
-            needed_by[io] = set()
-        if io not in depends_on:
-            depends_on[io] = set()
+        for output in needed_by[input]:
+            assert isinstance(output, _ModOutput) and output.module == input.module
+            depends_on[output].add(input)
 
     return needed_by, depends_on
 
