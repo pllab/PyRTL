@@ -74,41 +74,63 @@ class Dependent(OutputSort):
         wns = ", ".join(map(str, sorted(self.depends_on_set, key=lambda w: w._original_name)))
         return "Dependent (depends on: %s)" % wns
 
-# TODO a function that just checks if a new connection introduces a problem, without
-# us having to do all the extra checks if possible
-# was "error_if_not_well_connected"
+
+# TODO not sure if useful
+# def is_well_connected_block(block=None):
+#     return not find_bad_connection_in_block(block)
+# def is_well_connected_module(module, wires_to_inputs=None):
+#     return not find_bad_connection_from_module(module, wires_to_inputs)
 
 
-def is_well_connected_block(block=None):
+def find_bad_connection_in_block(block=None):
     """ Check if all modules in a block are well-connected to one another.
 
         Compute the intermodular reachability once to save some computation hopefully.
     """
     block = working_block(block)
     wires_to_inputs = _build_intermodular_reachability_maps(block.modules)
-    return all(is_well_connected_module(m, wires_to_inputs) for m in block.modules)
+    for m in block.modules:
+        bad_conn = find_bad_connection_from_module(m, wires_to_inputs)
+        if bad_conn:
+            return bad_conn  # TODO could accumulate and return all of them
+    return None
 
 
-def is_well_connected_module(module, wires_to_inputs):
-    """ Check if a single module is well-connected to other modules in the block"""
-    # TODO need to make sure I can do this when the circuit is not yet complete,
-    # and be adding to it as you go/add wirevectors to the block
+def find_bad_connection_from_module(module, wires_to_inputs=None):
+    """ Check if a single module is well-connected to other modules in the block.
+        Returns the first bad connection found originating from it.
+    """
+    # TODO Improve so that the internal state is updated/added as we go even
+    # when the circuit is only partially complete. I.e. save/update the intermodular
+    # reachability maps after each net addition?
 
     from .module import _ModInput, _ModOutput
 
+    if not wires_to_inputs:
+        wires_to_inputs = _build_intermodular_reachability_maps([module])
+
     for output in module.outputs:
         for input in wires_to_inputs[output]:
+            if not output.sort:
+                raise PyrtlInternalError(
+                    'Cannot check well-connectedness of output wire "%s" that '
+                    'hasn\'t been annotated.' % str(output)
+                )
+            if not input.sort:
+                raise PyrtlInternalError(
+                    'Cannot check well-connectedness of input wire "%s" that '
+                    'hasn\'t been annotated.' % str(input)
+                )
+            # Note that ascriptions are fine, because by this point they should have
+            # been validated as correct, or thrown an error otherwise
             if isinstance(output.sort, Dependent) and isinstance(input.sort, Needed):
                 for depends_on_w in output.sort.depends_on_set:
                     assert isinstance(depends_on_w, _ModInput)
                     for needed_by_w in input.sort.needed_by_set:
                         assert isinstance(needed_by_w, _ModOutput)
                         if depends_on_w in wires_to_inputs[needed_by_w]:
-                            print("ill-connection between %s (%s) and %s (%s)"
-                                  % (str(input), input.module.name,
-                                     str(output), output.module.name))
-                            return False
-    return True
+                            return (output, input)
+    return None
 
 
 def _build_intermodular_reachability_maps(modules):
@@ -124,6 +146,10 @@ def _build_intermodular_reachability_maps(modules):
     src_map, _ = block.net_connections()
 
     for module in modules:
+
+        for o in module.outputs:
+            wires_to_inputs.setdefault(o, set())
+
         for input in module.inputs:
             work_list = [input]
             seen = set()
@@ -135,10 +161,7 @@ def _build_intermodular_reachability_maps(modules):
                 seen.add(s)
 
                 if s is not input:
-                    if s not in wires_to_inputs:
-                        wires_to_inputs[s] = {input}
-                    else:
-                        wires_to_inputs[s].add(input)
+                    wires_to_inputs.setdefault(s, set()).add(input)
 
                 # Must take advantage of module annotations so we
                 # don't need to descend into more nets than needed
@@ -160,12 +183,8 @@ def _build_intermodular_reachability_maps(modules):
                         continue
                     work_list.extend(src_net.args)
 
-    # Add empty sets for at least the output wires that never
-    # reached an some other module's input combinationally.
-    for o in module.outputs:
-        if o not in wires_to_inputs:
-            wires_to_inputs[o] = set()
-
+    # Just return the outputs
+    wires_to_inputs = {o: s for o, s in wires_to_inputs.items() if isinstance(o, _ModOutput)}
     return wires_to_inputs
 
 

@@ -295,8 +295,8 @@ class Block(object):
         added seperately with add_wirevector."""
 
         self.sanity_check_net(net)
-        self.modular_check_net(net)
         self.logic.add(net)
+        self.modular_check_net(net)
 
     def _add_memblock(self, mem):
         """ Registers a memory to the block.
@@ -404,49 +404,70 @@ class Block(object):
         # TODO probably need to verify memory's module is valid too...
         from .module import _ModInput, _ModOutput
         from .wire import WireVector
+        from .wiresorts import find_bad_connection_in_block
 
         def fail(arg, dest):
             raise PyrtlError('Invalid connection (%s -> %s).' % (str(arg), str(dest)))
 
         # For each pair of (arg, dest) in the net, check if modular isolation
         # is preserved based on the wires' owning modules.
-        for arg in net.args:
-            for dest in net.dests:
-                if isinstance(arg, _ModInput):
-                    if isinstance(dest, _ModInput):  # In -> In
-                        if dest.module.supermodule != arg.module:
-                            fail(arg, dest)
-                    elif isinstance(dest, _ModOutput):  # In -> Out
-                        if arg.module != dest.module:
-                            fail(arg, dest)
-                    else:  # In -> Wire
-                        if arg.module != dest.module:
-                            fail(arg, dest)
-                elif isinstance(arg, _ModOutput):
-                    if isinstance(dest, _ModOutput):  # Out -> Out (incl. to internal)
-                        if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
-                            fail(arg, dest)
-                    elif isinstance(dest, _ModInput):  # Out -> In
-                        if arg.module.supermodule != dest.module.supermodule:
-                            fail(arg, dest)
-                    else:  # Out -> Wire (incl. to internal)
-                        if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
-                            fail(arg, dest)
-                elif isinstance(arg, WireVector):
-                    if isinstance(dest, _ModInput):  # Wire -> In
-                        if arg.module != dest.module.supermodule:
-                            fail(arg, dest)
-                    elif isinstance(dest, _ModOutput):  # Wire -> Out
-                        if arg.module != dest.module:
-                            fail(arg, dest)
-                    else:  # Wire -> Wire
-                        if arg.module != dest.module:
-                            fail(arg, dest)
-        
-        # We know this individual connection is fine. Now see if completes
+        connections = [(arg, dest) for arg in net.args for dest in net.dests]
+        for arg, dest in connections:
+            if isinstance(arg, _ModInput):
+                if isinstance(dest, _ModInput):  # In -> In
+                    if dest.module.supermodule != arg.module:
+                        fail(arg, dest)
+                elif isinstance(dest, _ModOutput):  # In -> Out
+                    if arg.module != dest.module:
+                        fail(arg, dest)
+                else:  # In -> Wire
+                    if arg.module != dest.module:
+                        fail(arg, dest)
+            elif isinstance(arg, _ModOutput):
+                if isinstance(dest, _ModOutput):  # Out -> Out (incl. to internal)
+                    if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
+                        fail(arg, dest)
+                elif isinstance(dest, _ModInput):  # Out -> In
+                    if arg.module.supermodule != dest.module.supermodule:
+                        fail(arg, dest)
+                else:  # Out -> Wire (incl. to internal)
+                    if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
+                        fail(arg, dest)
+            elif isinstance(arg, WireVector):
+                if isinstance(dest, _ModInput):  # Wire -> In
+                    if arg.module != dest.module.supermodule:
+                        fail(arg, dest)
+                elif isinstance(dest, _ModOutput):  # Wire -> Out
+                    if arg.module != dest.module:
+                        fail(arg, dest)
+                else:  # Wire -> Wire
+                    if arg.module != dest.module:
+                        fail(arg, dest)
+
+        # We know this individual connection is fine. Now see if it completes
         # an intermodular sibling connection, and if so, if that causes
-        # a block-level malconnection.
-        # TODO
+        # a block-level malconnection. Reasoning: connections between a wire w and another y
+        # its supermodule will mean that y's sortedness hasn't yet been determined,
+        # so don't check those. Similarish reasoning for wire to submodule wire connections.
+        def are_from_sibling_modules(w, x):
+            return (
+                w.module
+                and x.module
+                and (w.module != x.module)
+                and (w.module.supermodule == x.module.supermodule)
+            )
+
+        for arg, dest in connections:
+            if are_from_sibling_modules(arg, dest):
+                bad_conn = find_bad_connection_in_block(arg.module.block)
+                if bad_conn:
+                    (output, input) = bad_conn
+                    raise PyrtlError(
+                        'ill-connection between "%s" (in "%s") and "%s" (in "%s"), '
+                        'caused by addition of net "%s".'
+                        % (str(output), output.module.name,
+                           str(input), input.module.name, str(net))
+                    )
 
     def wirevector_subset(self, cls=None, exclude=tuple()):
         """Return set of wirevectors, filtered by the type or tuple of types provided as cls.
