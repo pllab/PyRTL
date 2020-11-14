@@ -1,11 +1,17 @@
+"""
+Implementations of First-In First-Out (FIFO) queues
+"""
+
 import pyrtl
 
 
 class Fifo(pyrtl.Module):
-    def __init__(self, bitwidth, nels):
+    """ A basic FIFO queue, parameterizable by bitwidth and number of elements in the queue """
+
+    def __init__(self, bitwidth, nels, name=""):
         self.bitwidth = bitwidth
         self.nels = nels
-        super().__init__()
+        super(Fifo, self).__init__(name=name)
 
     def definition(self):
         ######################

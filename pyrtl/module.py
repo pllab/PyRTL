@@ -1,6 +1,10 @@
+"""
+Defines the Module class, an abstraction for encapsulating
+logic behind well-defined input/outputs.
+"""
+
 # pylint: disable=no-member
 # pylint: disable=unbalanced-tuple-unpacking
-from abc import ABC, abstractmethod
 import math
 import six
 
@@ -34,7 +38,10 @@ def next_mod_name(name=""):
         return name
 
 
-class Module(ABC):
+class Module(object):
+    """ The Module superclass. All user-defined modules must be a subclass
+        of this class.
+    """
 
     def __init__(self, name="", block=None, _checks=True):
         """ Create a module, which represents the encapsulation of logic
@@ -71,13 +78,12 @@ class Module(ABC):
         self._in_definition = False
         self.block._current_module_stack.pop()
 
-    @abstractmethod
     def definition(self):
         """ Each module subclass needs to provide the code that should be
             elaborated when the module is instantiated. This is like the
             `main` method of the module.
         """
-        pass
+        raise PyrtlError('Module subclasses must supply a `definition` method')
 
     def Input(self, bitwidth, name):
         if not self._in_definition:
@@ -213,7 +219,7 @@ def module_from_block(block=None, timing_out=None):
     class Top(Module):
         def __init__(self):
             # Ignore complaints from the sanity check; we'll do it later
-            super().__init__(name="Top", block=block, _checks=False)
+            super(Top, self).__init__(name="Top", block=block, _checks=False)
 
         def definition(self):
             pass
@@ -268,13 +274,15 @@ def module_from_block(block=None, timing_out=None):
 
     m.validity_check()
     import time
-    _ts = time.perf_counter()
+    # _ts = time.perf_counter()
     annotate_module(m)
-    _te = time.perf_counter()
+    # _te = time.perf_counter()
     return m  # , _te - _ts  # Remove after testing
 
 
 class _ModIO(WireVector):
+    """ The base class for module inputs/outputs """
+
     def __init__(self, bitwidth, name, module):
         """ We purposefully hide the original name so that multiple instantiations of the same
             module with named wires don't conflict. You access these wires via module.wire_name,
@@ -285,13 +293,15 @@ class _ModIO(WireVector):
         self._original_name = name
         self.sort = None
         self.module = module
-        super().__init__(bitwidth)
+        super(_ModIO, self).__init__(bitwidth)
 
     def __str__(self):
         return "%s/%d%s[%s]" % (self._original_name, self.bitwidth, self._code, self.module.name)
 
 
 class _ModInput(_ModIO):
+    """ A WireVector class for specifying input to a single module """
+
     _code = "I"
 
     def to_block_input(self, name=""):
@@ -306,6 +316,8 @@ class _ModInput(_ModIO):
 
 
 class _ModOutput(_ModIO):
+    """ A WireVector class for specifying output from a single module """
+
     _code = "O"
 
     def to_block_output(self, name=""):

@@ -8,7 +8,7 @@ import pyrtl
 
 class OneBitAdder(pyrtl.Module):
     def __init__(self, name=""):
-        super().__init__(name=name)
+        super(OneBitAdder, self).__init__(name=name)
 
     def definition(self):
         a = self.Input(1, 'a')
@@ -24,7 +24,7 @@ class NBitAdder(pyrtl.Module):
     def __init__(self, n, name=""):
         assert (n > 0)
         self.n = n
-        super().__init__(name=name)
+        super(NBitAdder, self).__init__(name=name)
 
     def definition(self):
         a = self.Input(self.n, 'a')
@@ -63,7 +63,7 @@ class TestBlockAttributes(unittest.TestCase):
 
         class M(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(M, self).__init__()
 
             def definition(self):
                 a = self.Input(3, name='a')
@@ -82,7 +82,7 @@ class TestBlockAttributes(unittest.TestCase):
 
         class A(pyrtl.Module):
             def __init__(self, name):
-                super().__init__(name)
+                super(A, self).__init__(name)
 
             def definition(self):
                 a = self.Input(3, 'a')
@@ -98,7 +98,7 @@ class TestBlockAttributes(unittest.TestCase):
     def test_duplicate_module_names(self):
         class M(pyrtl.Module):
             def __init__(self, name):
-                super().__init__(name=name)
+                super(M, self).__init__(name=name)
 
             def definition(self):
                 a = self.Input(3, 'a')
@@ -119,10 +119,22 @@ class TestBadModule(unittest.TestCase):
     def setUp(self):
         pyrtl.reset_working_block()
 
+    def test_no_definition(self):
+        class M(pyrtl.Module):
+            def __init__(self):
+                super(M, self).__init__()
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            M()
+        self.assertEqual(
+            str(ex.exception),
+            'Module subclasses must supply a `definition` method'
+        )
+
     def test_bad_mod_name(self):
         class M(pyrtl.Module):
             def __init__(self, name):
-                super().__init__(name=name)
+                super(M, self).__init__(name=name)
 
             def definition(self):
                 a = self.Input(3, 'a')
@@ -139,7 +151,7 @@ class TestBadModule(unittest.TestCase):
     def test_no_output(self):
         class M(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(M, self).__init__()
 
             def definition(self):
                 _ = pyrtl.Const(4)
@@ -154,7 +166,7 @@ class TestBadModule(unittest.TestCase):
     def test_empty_io_name(self):
         class M(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(M, self).__init__()
 
             def definition(self):
                 a = self.Input(3, name='')
@@ -171,7 +183,7 @@ class TestBadModule(unittest.TestCase):
     def test_duplicate_io_names(self):
         class M(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(M, self).__init__()
 
             def definition(self):
                 a = self.Input(3, name='a')
@@ -196,7 +208,7 @@ class TestBadModule(unittest.TestCase):
     def test_nonexistent_io_access(self):
         class A(pyrtl.Module):
             def __init__(self, name):
-                super().__init__(name=name)
+                super(A, self).__init__(name=name)
 
             def definition(self):
                 o = self.Output(4, 'o')
@@ -218,7 +230,7 @@ class TestBadModule(unittest.TestCase):
     def test_unconnected_inputs(self):
         class A(pyrtl.Module):
             def __init__(self, name):
-                super().__init__(name=name)
+                super(A, self).__init__(name=name)
 
             def definition(self):
                 i = self.Input(4, 'i')
@@ -235,10 +247,10 @@ class TestBadModule(unittest.TestCase):
     def test_unconnected_outputs(self):
         class A(pyrtl.Module):
             def __init__(self, name):
-                super().__init__(name=name)
+                super(A, self).__init__(name=name)
 
             def definition(self):
-                o = self.Output(4, 'o')
+                _o = self.Output(4, 'o')
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             A('m1')
         self.assertEqual(
@@ -265,7 +277,7 @@ class TestBadModule(unittest.TestCase):
     def test_bad_input_as_dest(self):
         class M(pyrtl.Module):
             def __init__(self, name):
-                super().__init__(name=name)
+                super(M, self).__init__(name=name)
 
             def definition(self):
                 i = self.Input(2, 'i')
@@ -275,10 +287,7 @@ class TestBadModule(unittest.TestCase):
 
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             M('m1')
-        self.assertEqual(
-            str(ex.exception),
-            'Invalid connection (const_0_3/2C -> i/2I[m1]).'
-        )
+        self.assertTrue(str(ex.exception).startswith('Invalid connection'))
 
 
 class TestSimpleModule(unittest.TestCase):
@@ -350,7 +359,7 @@ class TestModIO(unittest.TestCase):
     def test_bad_input_assignment_outside_module(self):
         class M(pyrtl.Module):
             def __init__(self):
-                super().__init__(name="m1")
+                super(M, self).__init__(name="m1")
 
             def definition(self):
                 i = self.Input(2, 'i')
@@ -369,7 +378,7 @@ class TestModIO(unittest.TestCase):
     def test_bad_output_assignment_outside_module(self):
         class M(pyrtl.Module):
             def __init__(self):
-                super().__init__(name="m1")
+                super(M, self).__init__(name="m1")
 
             def definition(self):
                 i = self.Input(2, 'i')
@@ -388,7 +397,7 @@ class TestModIO(unittest.TestCase):
 
         class M(pyrtl.Module):
             def __init__(self, name):
-                super().__init__(name=name)
+                super(M, self).__init__(name=name)
 
             def definition(self):
                 o = self.Output(4, 'o')
@@ -411,7 +420,7 @@ class TestModIO(unittest.TestCase):
 
         class M(pyrtl.Module):
             def __init__(self, name):
-                super().__init__(name=name)
+                super(M, self).__init__(name=name)
 
             def definition(self):
                 o = self.Output(4, 'o')
@@ -424,7 +433,7 @@ class TestModIO(unittest.TestCase):
     def test_no_modification_outside_definition(self):
         class A(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(A, self).__init__()
 
             def definition(self):
                 a = self.Input(3, 'a')
@@ -479,7 +488,7 @@ class TestDuplicateModules(unittest.TestCase):
     def test_connect_duplicate_modules_bad(self):
         class M(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(M, self).__init__()
 
             def definition(self):
                 i = self.Input(2, 'i')
@@ -500,7 +509,7 @@ class TestDuplicateModules(unittest.TestCase):
     def test_connect_duplicate_modules_good(self):
         class M(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(M, self).__init__()
 
             def definition(self):
                 i = self.Input(2, 'i')
@@ -608,7 +617,7 @@ class TestDoubleNestedModules(unittest.TestCase):
 
         class Inner2(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(Inner2, self).__init__()
 
             def definition(self):
                 x = self.Input(4, 'x')
@@ -622,7 +631,7 @@ class TestDoubleNestedModules(unittest.TestCase):
 
         class Inner(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(Inner, self).__init__()
 
             def definition(self):
                 a = self.Input(5, 'a')
@@ -638,7 +647,7 @@ class TestDoubleNestedModules(unittest.TestCase):
 
         class Outer(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(Outer, self).__init__()
 
             def definition(self):
                 a = self.Input(32, 'a')
@@ -664,7 +673,7 @@ class TestBadNestedModules(unittest.TestCase):
     def test_bad_assignment_within_nested_to_outside(self):
         class Inner2(pyrtl.Module):
             def __init__(self):
-                super().__init__(name="i2")
+                super(Inner2, self).__init__(name="i2")
 
             def definition(self):
                 x = self.Input(4, 'x')
@@ -673,7 +682,7 @@ class TestBadNestedModules(unittest.TestCase):
 
         class Inner(pyrtl.Module):
             def __init__(self):
-                super().__init__(name="i1")
+                super(Inner, self).__init__(name="i1")
 
             def definition(self):
                 a = self.Input(4, 'a')
@@ -684,7 +693,7 @@ class TestBadNestedModules(unittest.TestCase):
 
         class Outer(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(Outer, self).__init__()
 
             def definition(self):
                 a = self.Input(32, 'a')
@@ -799,11 +808,9 @@ class TestModuleImport(unittest.TestCase):
             self.assertTrue(isinstance(oba.s, pyrtl.module._ModOutput))
             self.assertTrue(isinstance(oba.cout, pyrtl.module._ModOutput))
 
-# TODO should we allow a module's inputs/outputs to remain
-# unconnected to the outside world?
 # TODO if I can get this working, I'll probably be
-# able to import BLIFs with submodules (TODO add as a test
-# case in test_inputoutput.py)
+# able to import BLIFs with submodules
+# (TODO add as a test case in test_inputoutput.py)
 
 
 if __name__ == "__main__":

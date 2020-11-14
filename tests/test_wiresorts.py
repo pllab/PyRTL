@@ -27,7 +27,7 @@ class TestSimpleModules(unittest.TestCase):
     def test_wire_sort_in_module(self):
         class T(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(T, self).__init__()
 
             def definition(self):
                 r = pyrtl.Register(1, 'r')
@@ -60,7 +60,7 @@ class TestSimpleModules(unittest.TestCase):
 class TestMultipleIntraModules(unittest.TestCase):
     class M(pyrtl.Module):
         def __init__(self, name=""):
-            super().__init__(name=name)
+            super(TestMultipleIntraModules.M, self).__init__(name=name)
 
         def definition(self):
             a = self.Input(4, 'a')
@@ -69,7 +69,7 @@ class TestMultipleIntraModules(unittest.TestCase):
 
     class N(pyrtl.Module):
         def __init__(self, name=""):
-            super().__init__(name=name)
+            super(TestMultipleIntraModules.N, self).__init__(name=name)
 
         def definition(self):
             a = self.Input(10, 'a')
@@ -169,7 +169,7 @@ class TestNestedModulesNBitAdder(unittest.TestCase):
 
     class OneBitAdder(pyrtl.Module):
         def __init__(self, name=""):
-            super().__init__(name=name)
+            super(TestNestedModulesNBitAdder.OneBitAdder, self).__init__(name=name)
 
         def definition(self):
             a = self.Input(1, 'a')
@@ -184,7 +184,7 @@ class TestNestedModulesNBitAdder(unittest.TestCase):
         def __init__(self, n, name=""):
             assert (n > 0)
             self.n = n
-            super().__init__(name=name)
+            super(TestNestedModulesNBitAdder.NBitAdder, self).__init__(name=name)
 
         def definition(self):
             a = self.Input(self.n, 'a')
@@ -233,7 +233,7 @@ class TestNestedModules(unittest.TestCase):
     def test_nested_connection_with_state(self):
         class Inner(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(Inner, self).__init__()
 
             def definition(self):
                 x = self.Input(6, 'x')
@@ -244,7 +244,7 @@ class TestNestedModules(unittest.TestCase):
 
         class Outer(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(Outer, self).__init__()
 
             def definition(self):
                 i = self.Input(6, 'i')
@@ -267,7 +267,7 @@ class TestNestedModules(unittest.TestCase):
     def test_nested_connection_with_state2(self):
         class Inner(pyrtl.Module):
             def __init__(self, name=""):
-                super().__init__(name=name)
+                super(Inner, self).__init__(name=name)
 
             def definition(self):
                 w = self.Input(1, 'w')
@@ -279,7 +279,7 @@ class TestNestedModules(unittest.TestCase):
 
         class Outer(pyrtl.Module):
             def __init__(self, name=""):
-                super().__init__(name=name)
+                super(Outer, self).__init__(name=name)
 
             def definition(self):
                 i = self.Input(6, 'i')

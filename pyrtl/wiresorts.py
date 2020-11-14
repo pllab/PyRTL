@@ -1,8 +1,9 @@
-# pylint: disable=missing-module-docstring
-# pylint: disable=missing-class-docstring
-# pylint: disable=missing-function-docstring
-
-import abc
+"""
+Set of classes and functions for expressing the "sort" of a wire.
+Here we're currently concerned with defining intermodular dependencies
+via the Free, Needed, Giving, and Dependent wire sorts, and using these
+sorts for determining well-connectedness.
+"""
 
 from .pyrtlexceptions import PyrtlError, PyrtlInternalError
 from .core import working_block
@@ -16,11 +17,15 @@ def _verbose_print(s):
         print(s)
 
 
-class InputSort(abc.ABC):
+class InputSort(object):
+    """ Base class for the sorts that can be assigned to module inputs """
     pass
 
 
 class Free(InputSort):
+    """ The wire sort for module inputs that are not combinationally connected
+        to any its module's outputs """
+
     # Allowing wire=None allows these to be used instantiated as ascriptions
     def __init__(self, wire=None):
         self.wire = wire
@@ -31,6 +36,9 @@ class Free(InputSort):
 
 
 class Needed(InputSort):
+    """ The wire sort for module inputs that *are* combinationally connected
+        to one or more of its module's outputs """
+
     def __init__(self, needed_by_set, wire=None, ascription=True):
         from .module import _ModOutput
         self.wire = wire
@@ -46,11 +54,15 @@ class Needed(InputSort):
         return "Needed (needed by: %s)" % wns
 
 
-class OutputSort(abc.ABC):
+class OutputSort(object):
+    """ Base class for the sorts that can be assigned to module outputs """
     pass
 
 
 class Giving(OutputSort):
+    """ A wire sort for module outputs that are not combinationally connected
+        to any its module's inputs """
+
     def __init__(self, wire=None):
         self.wire = wire
         self.depends_on_set = set()
@@ -60,6 +72,9 @@ class Giving(OutputSort):
 
 
 class Dependent(OutputSort):
+    """ The wire sort for module outputs that *are* combinationally connected
+        to one or more of its module's inputs """
+
     def __init__(self, depends_on_set, wire=None, ascription=True):
         from .module import _ModInput
         self.wire = wire
