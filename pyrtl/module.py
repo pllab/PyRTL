@@ -166,10 +166,10 @@ class Module(ABC):
         s = "Module '%s'\n" % self.__class__.__name__
         s += "  Inputs:\n"
         for wire in sorted(self.inputs, key=lambda w: w._original_name):
-            s += "    %s\n" % repr({wire._original_name, str(wire.sort)})
+            s += "    %s\n" % repr({wire._original_name: str(wire.sort)})
         s += "  Outputs:\n"
         for wire in sorted(self.outputs, key=lambda w: w._original_name):
-            s += "    %s\n" % repr({wire._original_name, str(wire.sort)})
+            s += "    %s\n" % repr({wire._original_name: str(wire.sort)})
         return s
 
     def __getattr__(self, name):
@@ -197,7 +197,7 @@ class Module(ABC):
                 (name, self.name, str(inputs), str(outputs), str(submodules)))
 
 
-def module_from_block(block=None):  # , timing_out=None):
+def module_from_block(block=None, timing_out=None):
     """ Convert a given block into a module. Its inputs and outputs become
         the module's inputs/outputs. All existing modules become
         submodules of this new toplevel module.
@@ -267,10 +267,11 @@ def module_from_block(block=None):  # , timing_out=None):
     m.block._current_module_stack.pop()
 
     m.validity_check()
-    # ts = time.perf_counter()
+    import time
+    _ts = time.perf_counter()
     annotate_module(m)
-    # te = time.perf_counter()
-    return m  # , te - ts
+    _te = time.perf_counter()
+    return m  # , _te - _ts  # Remove after testing
 
 
 class _ModIO(WireVector):
@@ -287,7 +288,7 @@ class _ModIO(WireVector):
         super().__init__(bitwidth)
 
     def __str__(self):
-        return "%s/%d%s(%s)" % (self._original_name, self.bitwidth, self._code, self.module.name)
+        return "%s/%d%s[%s]" % (self._original_name, self.bitwidth, self._code, self.module.name)
 
 
 class _ModInput(_ModIO):

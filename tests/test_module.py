@@ -211,7 +211,7 @@ class TestBadModule(unittest.TestCase):
             'that you used "self.Input" and "self.Output" rather than '
             '"pyrtl.Input" and "pyrtl.Output" to declare the IO wirevectors, '
             'and that you are accessing it from the correct module.\n'
-            'Available input wires are [] and output wires are [\'o/4O(m1)\'].\n'
+            'Available input wires are [] and output wires are [\'o/4O[m1]\'].\n'
             'Available submodules are [].'
         )
 
@@ -228,7 +228,7 @@ class TestBadModule(unittest.TestCase):
             A('m1')
         self.assertEqual(
             str(ex.exception),
-            'Invalid module. Input "i/4I(m1)" is not connected '
+            'Invalid module. Input "i/4I[m1]" is not connected '
             'to any internal module logic.'
         )
 
@@ -243,7 +243,7 @@ class TestBadModule(unittest.TestCase):
             A('m1')
         self.assertEqual(
             str(ex.exception),
-            'Invalid module. Output "o/4O(m1)" is not connected '
+            'Invalid module. Output "o/4O[m1]" is not connected '
             'to any internal module logic.'
         )
 
@@ -277,7 +277,7 @@ class TestBadModule(unittest.TestCase):
             M('m1')
         self.assertEqual(
             str(ex.exception),
-            'Invalid connection (const_0_3/2C -> i/2I(m1)).'
+            'Invalid connection (const_0_3/2C -> i/2I[m1]).'
         )
 
 
@@ -363,7 +363,7 @@ class TestModIO(unittest.TestCase):
             w <<= m.i
         self.assertEqual(
             str(ex.exception),
-            'Invalid connection (i/2I(m1) -> w/2W).'
+            'Invalid connection (i/2I[m1] -> w/2W).'
         )
 
     def test_bad_output_assignment_outside_module(self):
@@ -398,7 +398,7 @@ class TestModIO(unittest.TestCase):
             M('m1')
         self.assertEqual(
             str(ex.exception),
-            'Invalid connection (w/4W -> o/4O(m1)).'
+            'Invalid connection (w/4W -> o/4O[m1]).'
         )
 
     # TODO This *should* be illegal (but currently is not)
@@ -697,7 +697,7 @@ class TestBadNestedModules(unittest.TestCase):
             Outer()
         self.assertEqual(
             str(ex.exception),
-            'Invalid connection (a/4I(i1) -> y/4O(i2)).'
+            'Invalid connection (a/4I[i1] -> y/4O[i2]).'
         )
 
 
