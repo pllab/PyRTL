@@ -296,7 +296,7 @@ class Block(object):
 
         self.sanity_check_net(net)
         self.logic.add(net)
-        self.modular_check_net(net)
+        #self.intermodular_check_net(net)
 
     def _add_memblock(self, mem):
         """ Registers a memory to the block.
@@ -395,61 +395,13 @@ class Block(object):
         else:
             return None
 
-    def modular_check_net(self, net):
-        """ This should be called whenever a net is being added to the block,
-            to see if it breaks any module invariants.
-
-            Raises a PyrtlError if bad connections are detected.
+    def intermodular_check_net(self, net):
+        """ Check if this net causes a bad intermodular connection.
+            Raises a PyrtlError if detected.
         """
         # TODO probably need to verify memory's module is valid too...
-        from .module import _ModInput, _ModOutput
-        from .wire import WireVector
+        #from .module import _ModInput, _ModOutput
         from .wiresorts import find_bad_connection_in_block
-
-        # If this design has no modules whatsoever, just skip!
-        if not net.args[0]._block.modules:
-            return
-
-        def fail(arg, dest):
-            raise PyrtlError('Invalid connection (%s -> %s).' % (str(arg), str(dest)))
-
-        # For each pair of (arg, dest) in the net, check if modular isolation
-        # is preserved based on the wires' owning modules.
-        connections = [(arg, dest) for arg in net.args for dest in net.dests]
-        for arg, dest in connections:
-            if isinstance(arg, _ModInput):
-                if isinstance(dest, _ModInput):  # In -> In
-                    if dest.module.supermodule != arg.module:
-                        fail(arg, dest)
-                elif isinstance(dest, _ModOutput):  # In -> Out
-                    if arg.module != dest.module:
-                        fail(arg, dest)
-                else:  # In -> Wire
-                    if arg.module != dest.module:
-                        fail(arg, dest)
-            elif isinstance(arg, _ModOutput):
-                if isinstance(dest, _ModOutput):  # Out -> Out (incl. to internal)
-                    if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
-                        fail(arg, dest)
-                elif isinstance(dest, _ModInput):  # Out -> In
-                    if arg.module.supermodule != dest.module.supermodule:
-                        fail(arg, dest)
-                else:  # Out -> Wire (incl. to internal)
-                    if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
-                        fail(arg, dest)
-            elif isinstance(arg, WireVector):
-                if isinstance(dest, _ModInput):  # Wire -> In
-                    if arg.module != dest.module.supermodule:
-                        fail(arg, dest)
-                elif isinstance(dest, _ModOutput):  # Wire -> Out
-                    if arg.module != dest.module:
-                        fail(arg, dest)
-                else:  # Wire -> Wire
-                    if arg.module != dest.module:
-                        fail(arg, dest)
-        
-        # Right now, when importing a module from the working block, there issues
-        # when calling block.net_connections()...WHY???
 
         def creates_an_intermodular_connection(w, x):
             # TODO implement by returning all the modules comb.-connected to x if so
@@ -458,6 +410,8 @@ class Block(object):
 
         # We know this individual connection is fine. Now see if it completes
         # an intermodular connection, and if so, if that causes a block-level malconnection.
+        # TODO clean this up too
+        connections = [(arg, dest) for arg in net.args for dest in net.dests]
         for arg, dest in connections:
             if creates_an_intermodular_connection(arg, dest):
                 bad_conn = find_bad_connection_in_block(arg._block)  # arg might not be in a module
@@ -724,8 +678,9 @@ class Block(object):
 
     def sanity_check_net(self, net):
         """ Check that net is a valid LogicNet. """
-        from .wire import Input, Output, Const
+        from .wire import Input, Output, Const, WireVector
         from .memory import _MemReadBase
+        from .module import _ModInput, _ModOutput
 
         # general sanity checks that apply to all operations
         if not isinstance(net, LogicNet):
@@ -818,6 +773,53 @@ class Block(object):
             raise PyrtlInternalError('error, mem read dest bitwidth mismatch')
         if net.op == '@' and net.dests != ():
             raise PyrtlInternalError('error, mem write dest should be empty tuple')
+
+        # For each pair of (arg, dest) in the net, check if modular isolation
+        # is preserved based on the wires' owning modules. Skip if the design
+        # has no modules.
+        if not net.args[0]._block.modules:
+            return
+
+        def fail(arg, dest, reason):
+            raise PyrtlError(
+                'Invalid connection (%s -> %s). %s for these wire types.'
+                % (str(arg), str(dest), reason)
+            )
+
+        # TODO probably need to verify memory's module is valid too...
+        # TODO also probably improve these error messages.
+        connections = [(arg, dest) for arg in net.args for dest in net.dests]
+        for arg, dest in connections:
+            if isinstance(arg, _ModInput):
+                if isinstance(dest, _ModInput):  # In -> In
+                    if arg.module != dest.module.supermodule:
+                        fail(arg, dest, "Argument must belong to supermodule of destination")
+                elif isinstance(dest, _ModOutput):  # In -> Out
+                    if arg.module != dest.module:
+                        fail(arg, dest, "Argument and destination must belong to same module")
+                else:  # In -> Wire
+                    if arg.module != dest.module:
+                        fail(arg, dest, "Argument and destination must belong to same module")
+            elif isinstance(arg, _ModOutput):
+                if isinstance(dest, _ModOutput):  # Out -> Out (incl. to internal)
+                    if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
+                        fail(arg, dest, "Argument must belong to same or submodule of destination")
+                elif isinstance(dest, _ModInput):  # Out -> In
+                    if arg.module.supermodule != dest.module.supermodule:
+                        fail(arg, dest, "Argument and destination must be in the same supermodule")
+                else:  # Out -> Wire (incl. to internal)
+                    if (arg.module.supermodule != dest.module) and (arg.module != dest.module):
+                        fail(arg, dest, "Argument must belong to same or submodule of desitnation")
+            elif isinstance(arg, WireVector):
+                if isinstance(dest, _ModInput):  # Wire -> In
+                    if arg.module != dest.module.supermodule:
+                        fail(arg, dest, "Argument must belong to supermodule of destination")
+                elif isinstance(dest, _ModOutput):  # Wire -> Out
+                    if arg.module != dest.module:
+                        fail(arg, dest, "Argument and destination must belong to same module")
+                else:  # Wire -> Wire
+                    if arg.module != dest.module:
+                        fail(arg, dest, "Argument and destination must belong to same module")
 
 
 class PostSynthBlock(Block):

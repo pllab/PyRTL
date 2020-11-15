@@ -372,7 +372,8 @@ class TestModIO(unittest.TestCase):
             w <<= m.i
         self.assertEqual(
             str(ex.exception),
-            'Invalid connection (i/2I[m1] -> w/2W).'
+            'Invalid connection (i/2I[m1] -> w/2W). '
+            'Argument and destination must belong to same module for these wire types.'
         )
 
     def test_bad_output_assignment_outside_module(self):
@@ -407,7 +408,8 @@ class TestModIO(unittest.TestCase):
             M('m1')
         self.assertEqual(
             str(ex.exception),
-            'Invalid connection (w/4W -> o/4O[m1]).'
+            'Invalid connection (w/4W -> o/4O[m1]). '
+            'Argument and destination must belong to same module for these wire types.'
         )
 
     # TODO This *should* be illegal (but currently is not)
@@ -706,7 +708,8 @@ class TestBadNestedModules(unittest.TestCase):
             Outer()
         self.assertEqual(
             str(ex.exception),
-            'Invalid connection (a/4I[i1] -> y/4O[i2]).'
+            'Invalid connection (a/4I[i1] -> y/4O[i2]). '
+            'Argument and destination must belong to same module for these wire types.'
         )
 
 
