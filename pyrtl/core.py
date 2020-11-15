@@ -401,8 +401,9 @@ class Block(object):
         """
         from .wiresorts import find_bad_connection_in_block
 
-        # Skip if there aren't any intermodular connections to check
-        if len(net.args[0]._block.modules) < 2:
+        # Skip if there are zero modules; we still need to check if there's only
+        # one module, since there could exist an intermodular connections to itself
+        if not net.args[0]._block.modules:
             return
 
         def creates_an_intermodular_connection(w, x):
