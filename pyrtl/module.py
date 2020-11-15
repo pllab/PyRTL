@@ -263,7 +263,7 @@ class Module(object):
 
 
 def module_from_block(block=None):
-    return Module.from_block(block)[0]  # TODO remove [0] after finishing timing tests
+    return Module.from_block(block)[0]  # TODO add [0] when not doing timing tests
 
 
 class _ModIO(WireVector):

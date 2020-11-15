@@ -296,7 +296,7 @@ class Block(object):
 
         self.sanity_check_net(net)
         self.logic.add(net)
-        #self.intermodular_check_net(net)
+        self.intermodular_check_net(net)
 
     def _add_memblock(self, mem):
         """ Registers a memory to the block.
@@ -399,9 +399,11 @@ class Block(object):
         """ Check if this net causes a bad intermodular connection.
             Raises a PyrtlError if detected.
         """
-        # TODO probably need to verify memory's module is valid too...
-        #from .module import _ModInput, _ModOutput
         from .wiresorts import find_bad_connection_in_block
+
+        # Skip if design has no modules.
+        if not net.args[0]._block.modules:
+            return
 
         def creates_an_intermodular_connection(w, x):
             # TODO implement by returning all the modules comb.-connected to x if so
@@ -410,7 +412,7 @@ class Block(object):
 
         # We know this individual connection is fine. Now see if it completes
         # an intermodular connection, and if so, if that causes a block-level malconnection.
-        # TODO clean this up too
+        # TODO clean this up too, and probably need to verify memory's module is valid too...
         connections = [(arg, dest) for arg in net.args for dest in net.dests]
         for arg, dest in connections:
             if creates_an_intermodular_connection(arg, dest):
@@ -774,17 +776,14 @@ class Block(object):
         if net.op == '@' and net.dests != ():
             raise PyrtlInternalError('error, mem write dest should be empty tuple')
 
-        # For each pair of (arg, dest) in the net, check if modular isolation
-        # is preserved based on the wires' owning modules. Skip if the design
-        # has no modules.
+        # For each pair of (arg, dest) in the net, check if modular isolation is preserved
+        # based on the wires' owning modules. Skip if the design has no modules.
         if not net.args[0]._block.modules:
             return
 
         def fail(arg, dest, reason):
-            raise PyrtlError(
-                'Invalid connection (%s -> %s). %s for these wire types.'
-                % (str(arg), str(dest), reason)
-            )
+            raise PyrtlError('Invalid connection (%s -> %s). %s for these wire types.'
+                             % (str(arg), str(dest), reason))
 
         # TODO probably need to verify memory's module is valid too...
         # TODO also probably improve these error messages.
