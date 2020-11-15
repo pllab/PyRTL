@@ -401,6 +401,12 @@ class Block(object):
         """
         from .wiresorts import find_bad_connection_in_block
 
+        # TODO this is incredibly inefficient. Don't run this function
+        # until I've implemented 'creates_an_intermodular_connection' efficiently.
+        # Otherwise this function will be run over every net insertion
+        # (since is called as part of add_net)
+        return
+
         # Skip if there are zero modules; we still need to check if there's only
         # one module, since there could exist an intermodular connections to itself
         if not net.args[0]._block.modules:
