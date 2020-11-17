@@ -225,6 +225,114 @@ class TestNestedModulesNBitAdder(unittest.TestCase):
             self.assertTrue(oba.cout.sort.depends_on_set, {oba.a, oba.b, oba.cin})
 
 
+class TestAscriptions(unittest.TestCase):
+
+    def setUp(self):
+        pyrtl.reset_working_block()
+
+    def test_good_sort_ascriptions_using_sort_classes(self):
+        class L(pyrtl.Module):
+            def __init__(self):
+                super().__init__()
+
+            def definition(self):
+                a = self.Input(4, 'a', sort=pyrtl.wiresorts.Free)
+                b = self.Output(6, 'b', sort=pyrtl.wiresorts.Giving)
+                c = self.Input(2, 'c', sort=pyrtl.wiresorts.Needed)
+                d = self.Output(2, 'd', sort=pyrtl.wiresorts.Dependent)
+                r = pyrtl.Register(5, 'r')
+                r.next <<= a + 1
+                b <<= r * 4
+                d <<= c - 1
+
+        try:
+            L()
+        except pyrtl.PyrtlError:
+            self.fail("The wire sort ascriptions are correct; "
+                      "an error should not have been thrown.")
+
+    def test_good_sort_ascription_using_objects_with_wire_names(self):
+        class L(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a', sort=pyrtl.wiresorts.Free)
+                b = self.Output(6, 'b', sort=pyrtl.wiresorts.Giving)
+                c = self.Input(2, 'c', sort=pyrtl.wiresorts.Needed({'d'}))
+                d = self.Output(2, 'd', sort=pyrtl.wiresorts.Dependent({'c'}))
+                r = pyrtl.Register(5, 'r')
+                r.next <<= a + 1
+                b <<= r * 4
+                d <<= c - 1
+
+        try:
+            L()
+        except pyrtl.PyrtlError:
+            self.fail("The wire sort ascription objects (using names) are correct; "
+                      "an error should not have been thrown.")
+
+    def test_bad_sort_ascriptions(self):
+        class L(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a', sort=pyrtl.wiresorts.Needed)
+                b = self.Output(6, 'b', sort=pyrtl.wiresorts.Giving)
+                c = self.Input(2, 'c', sort=pyrtl.wiresorts.Needed)
+                d = self.Output(2, 'd', sort=pyrtl.wiresorts.Dependent)
+                r = pyrtl.Register(5, 'r')
+                r.next <<= a + 1
+                b <<= r * 4
+                d <<= c - 1
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            L("L")
+        self.assertEqual(
+            str(ex.exception),
+            "Unmatched sort ascription on wire a/4I[L].\n"
+            "User provided Needed.\n"
+            "But we computed Free."
+        )
+
+    def test_invalid_input_sort_ascription(self):
+        class L(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a', sort=pyrtl.wiresorts.Dependent)
+                b = self.Output(6, 'b', sort=pyrtl.wiresorts.Dependent)
+                b <<= a * 4  # Never reached
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            L()
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid sort ascription for input "a" '
+            '(must provide either Free or Needed type name or instance).'
+        )
+
+    def test_invalid_output_sort_ascription(self):
+        class L(pyrtl.Module):
+            def __init__(self, name=""):
+                super().__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a', sort=pyrtl.wiresorts.Needed)
+                b = self.Output(6, 'b', sort=pyrtl.wiresorts.Needed)
+                b <<= a * 4
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            L()
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid sort ascription for output "b" '
+            '(must provide either Giving or Dependent type name or instance).'
+        )
+
+
 class TestNestedModules(unittest.TestCase):
 
     def setUp(self):

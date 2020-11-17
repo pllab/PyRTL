@@ -14,7 +14,7 @@ from .memory import MemBlock
 from .pyrtlexceptions import PyrtlError, PyrtlInternalError
 from .transform import replace_wire
 from .wire import WireVector, Register, Input, Output
-from .wiresorts import annotate_module
+from .wiresorts import annotate_module, Free, Needed, Giving, Dependent
 
 _modIndexer = _NameIndexer("mod_")
 
@@ -144,18 +144,18 @@ class Module(object):
         _te = time.perf_counter()
         return self, _te - _ts  # Remove after testing
 
-    def Input(self, bitwidth, name):
+    def Input(self, bitwidth, name, sort=None):
         if not self._in_definition:
             raise PyrtlError("Cannot create a module input outside of the module's definition")
-        w = _ModInput(bitwidth, name, self)
+        w = _ModInput(bitwidth, name, self, sort=sort)
         self.inputs.add(w)
         self.inputs_by_name[w._original_name] = w
         return w
 
-    def Output(self, bitwidth, name):
+    def Output(self, bitwidth, name, sort=None):
         if not self._in_definition:
             raise PyrtlError("Cannot create a module output outside of the module's definition")
-        w = _ModOutput(bitwidth, name, self)
+        w = _ModOutput(bitwidth, name, self, sort=sort)
         self.outputs.add(w)
         self.outputs_by_name[w._original_name] = w
         return w
@@ -201,13 +201,15 @@ class Module(object):
 
         src_dict, dest_dict = self.block.net_connections()
 
-        # All _ModInput and _ModOutput wires have been connected
+        # All _ModInput and _ModOutput wires have been connected; their sort (if ascribed)
+        # needed_by sets on only contain _ModOutput wires from this module. TODO
         for wire in self.inputs:
             if wire not in dest_dict:
                 raise PyrtlError('Invalid module. Input "%s" is not connected '
                                  'to any internal module logic.' % str(wire))
 
-        # All _ModOutput wires have been connected
+        # All _ModOutput wires have been connected; their sort (if ascribed)
+        # depends_on sets only contain _ModInput wires from this module.  TODO
         for wire in self.outputs:
             if wire not in src_dict:
                 raise PyrtlError('Invalid module. Output "%s" is not connected '
@@ -263,21 +265,22 @@ class Module(object):
 
 
 def module_from_block(block=None):
-    return Module.from_block(block)  # TODO add [0] when not doing timing tests
+    return Module.from_block(block)[0]  # TODO add [0] when not doing timing tests
 
 
 class _ModIO(WireVector):
     """ The base class for module inputs/outputs """
 
-    def __init__(self, bitwidth, name, module):
+    def __init__(self, bitwidth, name, module, sort=None):
         """ We purposefully hide the original name so that multiple instantiations of the same
             module with named wires don't conflict. You access these wires via module.wire_name,
             where wire_name is the wire's original_name given in the initializer here.
         """
         if not name:
             raise PyrtlError("Must supply a non-empty name for a module's input/output wire")
+
         self._original_name = name
-        self.sort = None
+        self.sort = sort
         self.module = module
         super(_ModIO, self).__init__(bitwidth)
 
@@ -289,6 +292,20 @@ class _ModInput(_ModIO):
     """ A WireVector class for specifying input to a single module """
 
     _code = "I"
+
+    def __init__(self, bitwidth, name, module, sort=None):
+        """ Sort can be the type, or an instance of the object with the needed_by set filled in
+            with either actual module output objects, or their names (in the case of an ascription)
+        """
+        if (sort
+                and (sort not in (Free, Needed))
+                and (not isinstance(sort, (Free, Needed)))):
+            raise PyrtlError(
+                'Invalid sort ascription for input "%s" '
+                '(must provide either Free or Needed type name or instance).'
+                % name
+            )
+        super(_ModInput, self).__init__(bitwidth, name, module, sort)
 
     def to_block_input(self, name=""):
         """ Access this wire via a block Input """
@@ -305,6 +322,20 @@ class _ModOutput(_ModIO):
     """ A WireVector class for specifying output from a single module """
 
     _code = "O"
+
+    def __init__(self, bitwidth, name, module, sort=None):
+        """ Sort can be the type, or an instance of the object with the depends_on set filled in
+            with either actual module input objects, or their names (in the case of an ascription)
+        """
+        if (sort
+                and (sort not in (Giving, Dependent))
+                and (not isinstance(sort, (Giving, Dependent)))):
+            raise PyrtlError(
+                'Invalid sort ascription for output "%s" '
+                '(must provide either Giving or Dependent type name or instance).'
+                % name
+            )
+        super(_ModOutput, self).__init__(bitwidth, name, module, sort)
 
     def to_block_output(self, name=""):
         """ Access this wire via a block Output """

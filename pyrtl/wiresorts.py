@@ -27,6 +27,7 @@ class Free(InputSort):
         to any its module's outputs """
 
     # Allowing wire=None allows these to be used instantiated as ascriptions
+    # TODO an actually, we never use the .wire attribute, so it can probably be removed.
     def __init__(self, wire=None):
         self.wire = wire
         self.needed_by_set = set()
@@ -351,10 +352,10 @@ def annotate_module(module):
             # The user can provide the classname of the sort or an actual instance of the class.
             if io.sort and not sort_matches(io.sort, sort):
                 raise PyrtlError(
-                    "Unmatched sort ascription on wire %s in module %s.\n"
+                    "Unmatched sort ascription on wire %s.\n"
                     "User provided %s.\n"
                     "But we computed %s."
-                    % (str(io), io.module.name, io.sort.__name__, str(sort)))
+                    % (str(io), io.sort.__name__, str(sort)))
             io.sort = sort
 
             sortmap[io._original_name] = sort
