@@ -26,11 +26,9 @@ class Free(InputSort):
     """ The wire sort for module inputs that are not combinationally connected
         to any its module's outputs """
 
-    # Allowing wire=None allows these to be used instantiated as ascriptions
-    # TODO an actually, we never use the .wire attribute, so it can probably be removed.
-    def __init__(self, wire=None):
-        self.wire = wire
+    def __init__(self, ascription=True):
         self.needed_by_set = set()
+        self.ascription = ascription
 
     def __str__(self):
         return "Free"
@@ -40,9 +38,8 @@ class Needed(InputSort):
     """ The wire sort for module inputs that *are* combinationally connected
         to one or more of its module's outputs """
 
-    def __init__(self, needed_by_set, wire=None, ascription=True):
+    def __init__(self, needed_by_set, ascription=True):
         from .module import _ModOutput
-        self.wire = wire
         self.needed_by_set = needed_by_set
         self.ascription = ascription
         # Sanity check
@@ -64,9 +61,9 @@ class Giving(OutputSort):
     """ A wire sort for module outputs that are not combinationally connected
         to any its module's inputs """
 
-    def __init__(self, wire=None):
-        self.wire = wire
+    def __init__(self, ascription=True):
         self.depends_on_set = set()
+        self.ascription = ascription
 
     def __str__(self):
         return "Giving"
@@ -76,9 +73,8 @@ class Dependent(OutputSort):
     """ The wire sort for module outputs that *are* combinationally connected
         to one or more of its module's inputs """
 
-    def __init__(self, depends_on_set, wire=None, ascription=True):
+    def __init__(self, depends_on_set, ascription=True):
         from .module import _ModInput
-        self.wire = wire
         self.depends_on_set = depends_on_set
         self.ascription = ascription
         # Sanity check
@@ -91,28 +87,42 @@ class Dependent(OutputSort):
         return "Dependent (depends on: %s)" % wns
 
 
-def find_bad_connection_in_block(block=None):
-    """ Check if all modules in a block are well-connected to one another.
+def check_interconnections(supermodule=None):
+    """ Check if all modules in a supermodule (or the block if not given)
+        are well-connected to one another.
 
         Compute the intermodular reachability once to save some computation hopefully.
-        We *could* accumulate and return all the bad connections instead.
+        If there is more than one bad connection between a pair of modules,
+        just report one of them.
     """
-    block = working_block(block)
-    wires_to_inputs = _build_intermodular_reachability_maps(block.modules)
-    for m in block.modules:
+    if not supermodule:
+        modules = working_block().top_level_modules
+    else:
+        modules = supermodule.submodules
+
+    if not modules:
+        return
+
+    bad_connections = []
+    wires_to_inputs = _build_intermodular_reachability_maps(modules)
+    for m in modules:
         bad_conn = find_bad_connection_from_module(m, wires_to_inputs)
         if bad_conn:
-            return bad_conn
-    return None
+            bad_connections.append(bad_conn)
+
+    if bad_connections:
+        raise PyrtlError(
+            "Invalid intermodular connections detected in %s:\n%s"
+            % (supermodule.name if supermodule else "Top",
+               "\n".join("%s -> %s" % (str(output), str(input))
+                         for (output, input) in bad_connections))
+        )
 
 
 def find_bad_connection_from_module(module, wires_to_inputs=None):
     """ Check if a single module is well-connected to other modules in the block.
         Returns the first bad connection found originating from it.
     """
-    # TODO Improve so that the internal state is updated/added as we go even
-    # when the circuit is only partially complete. I.e. save/update the intermodular
-    # reachability maps after each net addition?
 
     from .module import _ModInput, _ModOutput
 
@@ -293,10 +303,11 @@ def _build_intramodular_reachability_maps(module):
 def sort_matches(ascription, sort):
     # User can just supply classname (e.g. sort=Needed) without specifying _what_
     # the wire needs; that's fine, we just won't compare against the wires it needs.
-    if isinstance(ascription, type) and isinstance(sort, ascription):
-        return True
+    if isinstance(ascription, type):
+        return isinstance(sort, ascription)
 
     # Otherwise user supplied an instance of the InputSort/OutputSort class:
+    assert ascription.ascription
     if isinstance(ascription, Free) and isinstance(sort, Free):
         return True
     if isinstance(ascription, Giving) and isinstance(sort, Giving):
@@ -334,19 +345,19 @@ def annotate_module(module):
 
             sort = sorts[io._original_name]
             if isinstance(sort, Free):
-                io.sort = Free(io)
+                io.sort = Free(ascription=False)
             elif isinstance(sort, Giving):
-                io.sort = Giving(io)
+                io.sort = Giving(ascription=False)
             elif isinstance(sort, Needed):
-                io.sort = Needed(update_set(sort.needed_by_set), io, False)
+                io.sort = Needed(update_set(sort.needed_by_set), ascription=False)
             else:
-                io.sort = Dependent(update_set(sort.depends_on_set), io, False)
+                io.sort = Dependent(update_set(sort.depends_on_set), ascription=False)
     else:
         sortmap = {}
         needed_by, depends_on = _build_intramodular_reachability_maps(module=module)
 
         for io in module.inputs.union(module.outputs):
-            sort = get_wire_sort(io, needed_by, depends_on)
+            sort = _make_wire_sort(io, needed_by, depends_on)
 
             # If wire.sort was ascribed, check it and report if not matching.
             # The user can provide the classname of the sort or an actual instance of the class.
@@ -363,20 +374,20 @@ def annotate_module(module):
         module.block.module_sorts[modname] = sortmap
 
 
-def get_wire_sort(wire, needed_by, depends_on):
+def _make_wire_sort(wire, needed_by, depends_on):
     from .module import _ModInput, _ModOutput
 
     if isinstance(wire, _ModInput):
         input = wire
         nb_set = needed_by[input]
         if nb_set:
-            return Needed(nb_set, wire=input, ascription=False)
+            return Needed(nb_set, ascription=False)
         else:
             return Free(input)
     elif isinstance(wire, _ModOutput):
         output = wire
         do_set = depends_on[output]
         if do_set:
-            return Dependent(do_set, wire=output, ascription=False)
+            return Dependent(do_set, ascription=False)
         else:
             return Giving(output)

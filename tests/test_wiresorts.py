@@ -126,6 +126,7 @@ class TestMultipleIntraModules(unittest.TestCase):
         self.assertFalse(n1.b.sort.depends_on_set, set())
 
     def test_three_connected_simple_cycle_no_state(self):
+        # This test assumes checks done after each net insertion
         m1 = TestMultipleIntraModules.M()
         m2 = TestMultipleIntraModules.M()
         m3 = TestMultipleIntraModules.M()

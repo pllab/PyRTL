@@ -397,40 +397,110 @@ class Block(object):
 
     def intermodular_check_net(self, net):
         """ Check if this net causes a bad intermodular connection.
+
+            Right now, only does this check on top-level net insertions,
+            since each module check its submodule interconnections after construction.
             Raises a PyrtlError if detected.
         """
-        from .wiresorts import find_bad_connection_in_block
+        from .wiresorts import find_bad_connection_from_module
+        from .module import _ModInput, _ModOutput
 
-        # TODO this is incredibly inefficient. Don't run this function
-        # until I've implemented 'creates_an_intermodular_connection' efficiently.
-        # Otherwise this function will be run over every net insertion
-        # (since is called as part of add_net)
-        return
+        block = net.args[0]._block
 
-        # Skip if there are zero modules; we still need to check if there's only
-        # one module, since there could exist an intermodular connections to itself
-        if not net.args[0]._block.modules:
+        if not block.toplevel_modules:
+            # Skip if there aren't any toplevel modules (i.e. a normal PyRTL design)
             return
 
-        def creates_an_intermodular_connection(w, x):
-            # TODO implement by returning all the modules comb.-connected to x if so
-            # then call `find_bad_connection_from_module` for each of them below...
-            return True
+        if block.current_module:
+            # We're in a module definition, and all intermodular checks between a module's
+            # submodules are done after the module has been fully instantiated.
+            return
 
-        # We know this individual connection is fine. Now see if it completes
-        # an intermodular connection, and if so, if that causes a block-level malconnection.
-        # TODO clean this up too, and probably need to verify memory's module is valid too...
+        src_map, dst_map = block.net_connections()
+
+        def creates_intermodular_connections(w, x):
+            from .wire import Const, Input, Output, Register
+            # NOTE: This may be able to be combined with
+            #       wiresorts._build_intermodular_reachability_maps
+            #       The difference is that depends on knowing the  set of modules beforehand,
+            #       while here we're determining which modules we care about by seeing which
+            #       are connected to our wires, if any.
+
+            # See if w is connected to an module output combinationally
+            src_mods = set()
+            if w.module:
+                if not isinstance(w, _ModOutput):
+                    raise PyrtlInternalError(
+                        "Expected source wire owned by a module in a toplevel "
+                        "net connection to be a _ModOutput."
+                    )
+                src_mods.add(w.module)
+            else:
+                work_list = [w]
+                seen = set()
+                while work_list:
+                    s = work_list.pop()
+                    if s in seen:
+                        continue
+                    seen.add(s)
+
+                    if isinstance(s, Register):
+                        continue
+
+                    if isinstance(s, _ModInput):
+                        src_mods.add(s.module)
+
+                    if s not in src_map:
+                        continue
+
+                    for wire in src_map[s].args:
+                        work_list.append(wire)
+
+            # See if x is connected to an module output combinationally
+            dst_mods = set()
+            if x.module:
+                if not isinstance(x, _ModInput):
+                    raise PyrtlInternalError(
+                        "Expected dest wire owned by a module in a toplevel "
+                        "net connection to be a _ModInput."
+                    )
+                dst_mods.add(x.module)
+            else:
+                work_list = [x]
+                seen = set()
+                while work_list:
+                    a = work_list.pop()
+                    if a in seen:
+                        continue
+                    seen.add(a)
+
+                    if isinstance(a, Register):
+                        continue
+
+                    if isinstance(a, _ModOutput):
+                        dst_mods.add(a.module)
+
+                    if a not in dst_map:
+                        continue
+
+                    for net in dst_map[a]:
+                        for wire in net.dests:
+                            work_list.append(wire)
+
+            return src_mods if (src_mods and dst_mods) else set()
+
         connections = [(arg, dest) for arg in net.args for dest in net.dests]
         for arg, dest in connections:
-            if creates_an_intermodular_connection(arg, dest):
-                bad_conn = find_bad_connection_in_block(arg._block)  # arg might not be in a module
+            src_mods = creates_intermodular_connections(arg, dest)
+            for src_mod in src_mods:
+                bad_conn = find_bad_connection_from_module(src_mod)
                 if bad_conn:
                     (output, input) = bad_conn
                     raise PyrtlError(
                         'Connection error between "%s" (in "%s") and "%s" (in "%s"), '
                         'caused by addition of net "%s".'
                         % (str(output), output.module.name,
-                           str(input), input.module.name, str(net))
+                            str(input), input.module.name, str(net))
                     )
 
     def wirevector_subset(self, cls=None, exclude=tuple()):

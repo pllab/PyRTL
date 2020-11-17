@@ -14,7 +14,7 @@ from .memory import MemBlock
 from .pyrtlexceptions import PyrtlError, PyrtlInternalError
 from .transform import replace_wire
 from .wire import WireVector, Register, Input, Output
-from .wiresorts import annotate_module, Free, Needed, Giving, Dependent
+from .wiresorts import annotate_module, check_interconnections, Free, Needed, Giving, Dependent
 
 _modIndexer = _NameIndexer("mod_")
 
@@ -53,7 +53,7 @@ class Module(object):
         """
         self.inputs = set()
         self.outputs = set()
-        self.submodules = set()
+        self.submodules = set()  # set of submodules immediately below this one
         self.inputs_by_name = {}  # map from input.original_name to wire (for performance)
         self.outputs_by_name = {}  # map from output.original_name to wire (for perfomance)
         self.submodules_by_name = {}  # map from submodule.name to submodule (for performance)
@@ -63,9 +63,10 @@ class Module(object):
         self.name = next_mod_name(name)
         self.block = working_block(block)
         self.block._add_module(self)
-        self._definition()
+        self._definition()  # may instantiate, annotate, and check submodules recursively
         self.validity_check()
         annotate_module(self)
+        check_interconnections(self)
 
     def _definition(self):
         self._register_if_submodule()
@@ -112,7 +113,7 @@ class Module(object):
         self.block._current_module_stack.append(self)
 
         # For all top-level wires (i.e. not already in an existing module),
-        # set their owning module to this one
+        # set their owning module to this one. Is this too expensive?
         for wire in self.block.wirevector_set:
             if not wire.module:
                 wire.module = self
