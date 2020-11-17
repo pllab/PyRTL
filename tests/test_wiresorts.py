@@ -127,10 +127,6 @@ class TestMultipleIntraModules(unittest.TestCase):
 
     def test_three_connected_simple_cycle_no_state(self):
         # This test assumes checks done after each net insertion.
-        # It is probably more efficient, though less helpful from a reporting
-        # perspective, to just do the intermodular check for the top-level
-        # block (if it's not in a module) before a simulation like is done
-        # for detecting/reporting combinational loops already.
         m1 = TestMultipleIntraModules.M()
         m2 = TestMultipleIntraModules.M()
         m3 = TestMultipleIntraModules.M()

@@ -398,8 +398,14 @@ class Block(object):
     def intermodular_check_net(self, net):
         """ Check if this net causes a bad intermodular connection.
 
-            Right now, only does this check on top-level net insertions,
+            Right now, we only do this check on top-level net insertions,
             since each module check its submodule interconnections after construction.
+
+            It is probably more efficient, though less helpful from a reporting
+            perspective, to just do the intermodular check for the top-level
+            block (if it's not in a module) before a simulation like is done
+            for detecting/reporting combinational loops already.
+
             Raises a PyrtlError if detected.
         """
         from .wiresorts import find_bad_connection_from_module
