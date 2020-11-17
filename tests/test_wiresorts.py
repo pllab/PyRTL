@@ -165,6 +165,27 @@ class TestMultipleIntraModules(unittest.TestCase):
             w1 <<= w2
         self.assertTrue(str(ex.exception).startswith("Connection error"))
 
+    def test_outputs_to_multiple_connections(self):
+        class M(pyrtl.Module):
+            def __init__(self, name):
+                super(M, self).__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a')
+                b = self.Input(6, 'b')
+                c = self.Output(6, 'c')
+                c <<= a * 4 - b
+
+        m = M("M")
+        w1 = m.c * 4
+        w2 = m.c + 2
+        r = pyrtl.Register(8)
+        r.next <<= w1
+        m.a <<= r
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            m.b <<= w2
+        self.assertTrue(str(ex.exception).startswith("Connection error"))
+
 
 class TestNestedModulesNBitAdder(unittest.TestCase):
 
@@ -413,6 +434,66 @@ class TestNestedModules(unittest.TestCase):
         self.assertEqual(outer_mod.j.sort.needed_by_set, {outer_mod.o})
         self.assertTrue(isinstance(outer_mod.o.sort, pyrtl.wiresorts.Dependent))
         self.assertEqual(outer_mod.o.sort.depends_on_set, {outer_mod.j})
+
+    def test_direct_loop_inner_module(self):
+        class Inner(pyrtl.Module):
+            def __init__(self, name):
+                super(Inner, self).__init__(name=name)
+
+            def definition(self):
+                x = self.Input(2, 'x')
+                y = self.Output(2, 'y')
+                y <<= x + 1
+
+        class Outer(pyrtl.Module):
+            def __init__(self, name):
+                super(Outer, self).__init__(name=name)
+
+            def definition(self):
+                i = Inner(name="in_mod")
+                i.x <<= i.y
+                o = self.Output(1, 'o')
+                o <<= 0
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            o = Outer("Outer")
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid intermodular connections detected in "Outer":\n'
+            '(y/2O[in_mod] -> x/2I[in_mod])'
+        )
+
+    def test_indirect_loop_inner_module(self):
+        class Inner(pyrtl.Module):
+            def __init__(self, name):
+                super(Inner, self).__init__(name=name)
+
+            def definition(self):
+                x = self.Input(2, 'x')
+                y = self.Output(2, 'y')
+                y <<= x + 1
+
+        class Outer(pyrtl.Module):
+            def __init__(self, name):
+                super(Outer, self).__init__(name=name)
+
+            def definition(self):
+                i = Inner("in_mod")
+                o = self.Output(1, "o")
+                o <<= 0
+                w1 = pyrtl.WireVector(2)
+                w2 = pyrtl.WireVector(2)
+                w1 <<= i.y
+                i.x <<= w2
+                w2 <<= w1
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            o = Outer("Outer")
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid intermodular connections detected in "Outer":\n'
+            '(y/2O[in_mod] -> x/2I[in_mod])'
+        )
 
 
 if __name__ == "__main__":
