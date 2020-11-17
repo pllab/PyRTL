@@ -126,7 +126,11 @@ class TestMultipleIntraModules(unittest.TestCase):
         self.assertFalse(n1.b.sort.depends_on_set, set())
 
     def test_three_connected_simple_cycle_no_state(self):
-        # This test assumes checks done after each net insertion
+        # This test assumes checks done after each net insertion.
+        # It is probably more efficient, though less helpful from a reporting
+        # perspective, to just do the intermodular check for the top-level
+        # block (if it's not in a module) before a simulation like is done
+        # for detecting/reporting combinational loops already.
         m1 = TestMultipleIntraModules.M()
         m2 = TestMultipleIntraModules.M()
         m3 = TestMultipleIntraModules.M()
@@ -234,7 +238,7 @@ class TestAscriptions(unittest.TestCase):
     def test_good_sort_ascriptions_using_sort_classes(self):
         class L(pyrtl.Module):
             def __init__(self):
-                super().__init__()
+                super(L, self).__init__()
 
             def definition(self):
                 a = self.Input(4, 'a', sort=pyrtl.wiresorts.Free)
@@ -255,7 +259,7 @@ class TestAscriptions(unittest.TestCase):
     def test_good_sort_ascription_using_objects_with_wire_names(self):
         class L(pyrtl.Module):
             def __init__(self, name=""):
-                super().__init__(name=name)
+                super(L, self).__init__(name=name)
 
             def definition(self):
                 a = self.Input(4, 'a', sort=pyrtl.wiresorts.Free)
@@ -276,7 +280,7 @@ class TestAscriptions(unittest.TestCase):
     def test_bad_sort_ascriptions(self):
         class L(pyrtl.Module):
             def __init__(self, name=""):
-                super().__init__(name=name)
+                super(L, self).__init__(name=name)
 
             def definition(self):
                 a = self.Input(4, 'a', sort=pyrtl.wiresorts.Needed)
@@ -300,7 +304,7 @@ class TestAscriptions(unittest.TestCase):
     def test_invalid_input_sort_ascription(self):
         class L(pyrtl.Module):
             def __init__(self, name=""):
-                super().__init__(name=name)
+                super(L, self).__init__(name=name)
 
             def definition(self):
                 a = self.Input(4, 'a', sort=pyrtl.wiresorts.Dependent)
@@ -318,7 +322,7 @@ class TestAscriptions(unittest.TestCase):
     def test_invalid_output_sort_ascription(self):
         class L(pyrtl.Module):
             def __init__(self, name=""):
-                super().__init__(name=name)
+                super(L, self).__init__(name=name)
 
             def definition(self):
                 a = self.Input(4, 'a', sort=pyrtl.wiresorts.Needed)

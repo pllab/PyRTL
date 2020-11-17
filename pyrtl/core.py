@@ -420,13 +420,13 @@ class Block(object):
 
         def creates_intermodular_connections(w, x):
             from .wire import Const, Input, Output, Register
-            # NOTE: This may be able to be combined with
-            #       wiresorts._build_intermodular_reachability_maps
-            #       The difference is that depends on knowing the  set of modules beforehand,
-            #       while here we're determining which modules we care about by seeing which
-            #       are connected to our wires, if any.
+            # This may be able to be combined with a refactored version of
+            # wiresorts._build_intermodular_reachability_maps. The difference with this and
+            # that is that the latter depends on knowing the set of modules beforehand, while
+            # here we're determining which modules we care about by seeing which are connected
+            # to the w and x wires, if any.
 
-            # See if w is connected to an module output combinationally
+            # Find the nearest module outputs to which w is combinationally-connected (backwards)
             src_mods = set()
             if w.module:
                 if not isinstance(w, _ModOutput):
@@ -456,7 +456,7 @@ class Block(object):
                     for wire in src_map[s].args:
                         work_list.append(wire)
 
-            # See if x is connected to an module output combinationally
+            # Find the nearest module inputs to which x is combinationally-connected (forwards)
             dst_mods = set()
             if x.module:
                 if not isinstance(x, _ModInput):

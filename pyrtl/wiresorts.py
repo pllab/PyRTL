@@ -168,7 +168,7 @@ def _build_intermodular_reachability_maps(modules):
     for module in modules:
 
         for o in module.outputs:
-            wires_to_inputs.setdefault(o, set())
+            wires_to_inputs[o] = set()
 
         for input in module.inputs:
             work_list = [input]
