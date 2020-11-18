@@ -197,7 +197,7 @@ def _build_intermodular_reachability_maps(modules):
                     src_net = src_map[s]
                     assert src_net.dests[0] is s
 
-                    if src_net.op == 'm' and not src_net.op_params[1].asynchronous:
+                    if src_net.op == 'm' and not src_net.op_param[1].asynchronous:
                         continue
                     if src_net.op == '@':
                         continue

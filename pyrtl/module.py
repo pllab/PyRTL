@@ -183,6 +183,20 @@ class Module(object):
         for w in self.outputs:
             w.to_block_output()
 
+    def to_mod_input(self, wire, name=None):
+        """ Converts a wire into one of this module's inputs """
+        name = name if name else wire.name
+        new_wire = self.Input(len(wire), name=name)
+        replace_wire(wire, new_wire, new_wire, self.block)
+        return new_wire
+
+    def to_mod_output(self, wire, name=None):
+        """ Converts a wire into one of this module's outputs """
+        name = name if name else wire.name
+        new_wire = self.Output(len(wire), name=name)
+        replace_wire(wire, new_wire, new_wire, self.block)
+        return new_wire
+
     def validity_check(self):
         # At least one _ModOutput
         if not self.outputs:

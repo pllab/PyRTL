@@ -354,7 +354,6 @@ class TestModIO(unittest.TestCase):
 
     def setUp(self):
         pyrtl.reset_working_block()
-        self.module = OneBitAdder()
 
     def test_bad_input_assignment_outside_module(self):
         class M(pyrtl.Module):
@@ -458,28 +457,59 @@ class TestModIO(unittest.TestCase):
         )
 
     def test_original_names(self):
-        self.assertEqual(self.module.a._original_name, 'a')
-        self.assertEqual(self.module.b._original_name, 'b')
-        self.assertEqual(self.module.cout._original_name, 'cout')
-        self.assertEqual(self.module.s._original_name, 's')
-        self.assertEqual(self.module.cin._original_name, 'cin')
+        oba = OneBitAdder()
+        self.assertEqual(oba.a._original_name, 'a')
+        self.assertEqual(oba.b._original_name, 'b')
+        self.assertEqual(oba.cout._original_name, 'cout')
+        self.assertEqual(oba.s._original_name, 's')
+        self.assertEqual(oba.cin._original_name, 'cin')
 
     def test_to_block_input(self):
-        self.module.a.to_block_input('a')
-        self.module.b.to_block_input('b')
-        self.module.cin.to_block_input('cin')
-        block = self.module.block
-        for w in self.module.inputs:
-            wio = block.get_wirevector_by_name(w._original_name)
+        oba = OneBitAdder()
+        oba.a.to_block_input('a')
+        oba.b.to_block_input('b')
+        oba.cin.to_block_input('cin')
+        for w in oba.inputs:
+            wio = oba.block.get_wirevector_by_name(w._original_name)
             self.assertTrue(isinstance(wio, pyrtl.Input))
 
     def test_to_block_output(self):
-        self.module.s.to_block_output('s')
-        self.module.cout.to_block_output('cout')
-        block = self.module.block
-        for w in self.module.outputs:
-            wio = block.get_wirevector_by_name(w._original_name)
+        oba = OneBitAdder()
+        oba.s.to_block_output('s')
+        oba.cout.to_block_output('cout')
+        for w in oba.outputs:
+            wio = oba.block.get_wirevector_by_name(w._original_name)
             self.assertTrue(isinstance(wio, pyrtl.Output))
+
+    def test_to_module_input(self):
+        # A little contrived, but provided for symmetry
+        class M(pyrtl.Module):
+            def definition(self):
+                i = pyrtl.WireVector(8, 'i')
+                o = self.Output(8, 'o')
+                o <<= i - 3
+                self.to_mod_input(i)
+
+        m = M()
+        self.assertEqual(m.i._original_name, 'i')
+        self.assertTrue(isinstance(m.i, pyrtl.module._ModInput))
+
+    def test_to_module_output(self):
+        class M(pyrtl.Module):
+            def definition(self):
+                i = self.Input(8, 'i')
+                a, b, c = pyrtl.chop(i, 3, 3, 2)
+                self.to_mod_output(a, 'a')
+                self.to_mod_output(b, 'b')
+                self.to_mod_output(c, 'c')
+
+        m = M()
+        self.assertEqual(m.a._original_name, 'a')
+        self.assertEqual(m.b._original_name, 'b')
+        self.assertEqual(m.c._original_name, 'c')
+        self.assertTrue(isinstance(m.a, pyrtl.module._ModOutput))
+        self.assertTrue(isinstance(m.b, pyrtl.module._ModOutput))
+        self.assertTrue(isinstance(m.c, pyrtl.module._ModOutput))
 
 
 class TestDuplicateModules(unittest.TestCase):
