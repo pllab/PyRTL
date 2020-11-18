@@ -14,7 +14,8 @@ from .memory import MemBlock
 from .pyrtlexceptions import PyrtlError, PyrtlInternalError
 from .transform import replace_wire
 from .wire import WireVector, Register, Input, Output
-from .wiresorts import annotate_module, check_interconnections, Free, Needed, Giving, Dependent
+from .wiresorts import annotate_module, check_module_interconnections
+from .wiresorts import Free, Needed, Giving, Dependent
 
 _modIndexer = _NameIndexer("mod_")
 
@@ -66,7 +67,7 @@ class Module(object):
         self._definition()  # may instantiate, annotate, and check submodules recursively
         self.validity_check()
         annotate_module(self)
-        check_interconnections(self)
+        check_module_interconnections(self)
 
     def _definition(self):
         self._register_if_submodule()
@@ -198,9 +199,9 @@ class Module(object):
         return new_wire
 
     def validity_check(self):
-        # At least one _ModOutput
-        if not self.outputs:
-            raise PyrtlError("Module must have at least one output.")
+        # We _could_ check that there is at least one output and one input,
+        # but this doesn't hold for things like a Constant generator (no inputs)
+        # or a CPU (not outputs).
 
         # All _ModInput and _ModOutput names are unique (especially important since we use those
         # names as attributes for accessing them via the dot operator on the module).

@@ -87,16 +87,19 @@ class Dependent(OutputSort):
         return "Dependent (depends on: %s)" % wns
 
 
-def check_interconnections(supermodule=None):
+def check_module_interconnections(supermodule=None):
     """ Check if all modules in a supermodule (or the block if not given)
         are well-connected to one another.
 
         Compute the intermodular reachability once to save some computation hopefully.
-        If there is more than one bad connection between a pair of modules,
-        just report one of them.
+        If there is more than one bad connection between a pair of modules, we report
+        all of them.
+
+        TODO We should probably *not* report all the module interconnections that are a part
+        of the same logical loop, however. Just one in the loop suffices.
     """
     if not supermodule:
-        modules = working_block().top_level_modules
+        modules = working_block().toplevel_modules
     else:
         modules = supermodule.submodules
 

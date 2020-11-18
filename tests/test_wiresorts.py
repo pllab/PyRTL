@@ -125,7 +125,8 @@ class TestMultipleIntraModules(unittest.TestCase):
         self.assertTrue(isinstance(n1.b.sort, pyrtl.wiresorts.Giving))
         self.assertFalse(n1.b.sort.depends_on_set, set())
 
-    def test_three_connected_simple_cycle_no_state(self):
+    @unittest.skip
+    def test_three_connected_simple_cycle_with_no_state_immediate_check(self):
         # This test assumes checks done after each net insertion.
         m1 = TestMultipleIntraModules.M()
         m2 = TestMultipleIntraModules.M()
@@ -136,22 +137,27 @@ class TestMultipleIntraModules(unittest.TestCase):
             m1.a <<= m3.b
         self.assertTrue(str(ex.exception).startswith("Connection error"))
 
-    def test_ill_connected_to_self_loop(self):
+    @unittest.skip
+    def test_ill_connected_to_self_loop_immediate_check(self):
+        # This test assumes checks done after each net insertion.
         m = TestMultipleIntraModules.M()
 
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m.a <<= m.b
         self.assertTrue(str(ex.exception).startswith("Connection error"))
 
-    def test_ill_connected_transitive_normal_intermediate_wire(self):
+    @unittest.skip
+    def test_ill_connected_transitive_with_normal_intermediate_wire_immediate_check(self):
+        # This test assumes checks done after each net insertion.
         m = TestMultipleIntraModules.M()
-
         x = m.b * 2
+
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m.a <<= x
         self.assertTrue(str(ex.exception).startswith("Connection error"))
 
-    def test_loop_after_many_steps(self):
+    @unittest.skip
+    def test_loop_after_many_steps_immediate_check(self):
         """ Tests the scenario where you connect module input to
             something (say X), then connect module output to something
             else (say Y), and then later connect X to Y.
@@ -165,7 +171,8 @@ class TestMultipleIntraModules(unittest.TestCase):
             w1 <<= w2
         self.assertTrue(str(ex.exception).startswith("Connection error"))
 
-    def test_outputs_to_multiple_connections(self):
+    @unittest.skip
+    def test_outputs_to_multiple_connections_immediate_check(self):
         class M(pyrtl.Module):
             def __init__(self, name):
                 super(M, self).__init__(name=name)
@@ -185,6 +192,90 @@ class TestMultipleIntraModules(unittest.TestCase):
         with self.assertRaises(pyrtl.PyrtlError) as ex:
             m.b <<= w2
         self.assertTrue(str(ex.exception).startswith("Connection error"))
+
+    def test_three_connected_simple_cycle_with_no_state_check_after(self):
+        m1 = TestMultipleIntraModules.M("M1")
+        m2 = TestMultipleIntraModules.M("M2")
+        m3 = TestMultipleIntraModules.M("M3")
+        m2.a <<= m1.b
+        m3.a <<= m2.b
+        m1.a <<= m3.b
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            pyrtl.Simulation()
+        self.assertTrue(
+            str(ex.exception).startswith(
+                'Invalid intermodular connections detected in "Top":\n'
+            ))
+
+    def test_ill_connected_to_self_loop_check_after(self):
+        m = TestMultipleIntraModules.M("M")
+        m.a <<= m.b
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            pyrtl.Simulation()
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid intermodular connections detected in "Top":\n'
+            '(b/6O[M] -> a/4I[M])'
+        )
+
+    def test_ill_connected_transitive_with_normal_intermediate_wire_check_after(self):
+        m = TestMultipleIntraModules.M("M")
+        x = m.b * 2
+        m.a <<= x
+
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            pyrtl.Simulation()
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid intermodular connections detected in "Top":\n'
+            '(b/6O[M] -> a/4I[M])'
+        )
+
+    def test_loop_after_many_steps_immediate_check(self):
+        """ Tests the scenario where you connect module input to
+            something (say X), then connect module output to something
+            else (say Y), and then later connect X to Y.
+        """
+
+        m = TestMultipleIntraModules.M("M")
+        w1 = pyrtl.WireVector(4)
+        m.a <<= w1
+        w2 = m.b * 2
+        w1 <<= w2
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            pyrtl.working_block().sanity_check()
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid intermodular connections detected in "Top":\n'
+            '(b/6O[M] -> a/4I[M])'
+        )
+
+    def test_outputs_to_multiple_connections(self):
+        class M(pyrtl.Module):
+            def __init__(self, name):
+                super(M, self).__init__(name=name)
+
+            def definition(self):
+                a = self.Input(4, 'a')
+                b = self.Input(6, 'b')
+                c = self.Output(6, 'c')
+                c <<= a * 4 - b
+
+        m = M("M")
+        w1 = m.c * 4
+        w2 = m.c + 2
+        r = pyrtl.Register(8)
+        r.next <<= w1
+        m.a <<= r
+        m.b <<= w2
+        with self.assertRaises(pyrtl.PyrtlError) as ex:
+            pyrtl.Simulation()
+        self.assertEqual(
+            str(ex.exception),
+            'Invalid intermodular connections detected in "Top":\n'
+            '(c/6O[M] -> b/6I[M])'
+        )
 
 
 class TestNestedModulesNBitAdder(unittest.TestCase):

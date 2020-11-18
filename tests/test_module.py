@@ -148,21 +148,6 @@ class TestBadModule(unittest.TestCase):
             'Starting a module name with "mod_" is reserved for internal use.'
         )
 
-    def test_no_output(self):
-        class M(pyrtl.Module):
-            def __init__(self):
-                super(M, self).__init__()
-
-            def definition(self):
-                _ = pyrtl.Const(4)
-
-        with self.assertRaises(pyrtl.PyrtlError) as ex:
-            M()
-        self.assertEqual(
-            str(ex.exception),
-            "Module must have at least one output."
-        )
-
     def test_empty_io_name(self):
         class M(pyrtl.Module):
             def __init__(self):

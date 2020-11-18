@@ -296,7 +296,7 @@ class Block(object):
 
         self.sanity_check_net(net)
         self.logic.add(net)
-        self.intermodular_check_net(net)
+        # self.intermodular_check_net(net)  # Either do here, or during block-level sanity check
 
     def _add_memblock(self, mem):
         """ Registers a memory to the block.
@@ -646,6 +646,7 @@ class Block(object):
         # TODO: check that the wirevector_by_name is sane
         from .wire import Input, Const, Output
         from .helperfuncs import get_stack, get_stacks
+        from .wiresorts import check_module_interconnections
 
         # check for valid LogicNets (and wires)
         for net in self.logic:
@@ -698,6 +699,9 @@ class Block(object):
 
         # Check for async memories not specified as such
         self.sanity_check_memory_sync(wire_src_dict)
+
+        # Verify that all module interconnections are valid
+        check_module_interconnections()
 
         if debug_mode:
             # Check for wires that are destinations of a logicNet, but are not outputs and are never
