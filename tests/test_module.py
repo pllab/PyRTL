@@ -218,7 +218,7 @@ class TestBadModule(unittest.TestCase):
                 super(A, self).__init__(name=name)
 
             def definition(self):
-                i = self.Input(4, 'i')
+                _i = self.Input(4, 'i')
                 o = self.Output(4, 'o')
                 o <<= 4
         with self.assertRaises(pyrtl.PyrtlError) as ex:

@@ -15,6 +15,7 @@ from .pyrtlexceptions import PyrtlError, PyrtlInternalError
 from .transform import replace_wire
 from .wire import WireVector, Register, Input, Output
 from .wiresorts import annotate_module, check_module_interconnections
+from .wiresorts import sanity_check_input_sort, sanity_check_output_sort
 from .wiresorts import Free, Needed, Giving, Dependent
 
 _modIndexer = _NameIndexer("mod_")
@@ -317,14 +318,7 @@ class _ModInput(_ModIO):
         """ Sort can be the type, or an instance of the object with the needed_by set filled in
             with either actual module output objects, or their names (in the case of an ascription)
         """
-        if (sort
-                and (sort not in (Free, Needed))
-                and (not isinstance(sort, (Free, Needed)))):
-            raise PyrtlError(
-                'Invalid sort ascription for input "%s" '
-                '(must provide either Free or Needed type name or instance).'
-                % name
-            )
+        sanity_check_input_sort(sort, name)
         super(_ModInput, self).__init__(bitwidth, name, module, sort)
 
     def to_block_input(self, name=""):
@@ -347,14 +341,7 @@ class _ModOutput(_ModIO):
         """ Sort can be the type, or an instance of the object with the depends_on set filled in
             with either actual module input objects, or their names (in the case of an ascription)
         """
-        if (sort
-                and (sort not in (Giving, Dependent))
-                and (not isinstance(sort, (Giving, Dependent)))):
-            raise PyrtlError(
-                'Invalid sort ascription for output "%s" '
-                '(must provide either Giving or Dependent type name or instance).'
-                % name
-            )
+        sanity_check_output_sort(sort, name)
         super(_ModOutput, self).__init__(bitwidth, name, module, sort)
 
     def to_block_output(self, name=""):

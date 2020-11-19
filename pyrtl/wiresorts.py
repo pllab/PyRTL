@@ -16,7 +16,6 @@ def _verbose_print(s):
     if Verbose:
         print(s)
 
-
 class InputSort(object):
     """ Base class for the sorts that can be assigned to module inputs """
     pass
@@ -86,6 +85,25 @@ class Dependent(OutputSort):
         wns = ", ".join(map(str, sorted(self.depends_on_set, key=lambda w: w._original_name)))
         return "Dependent (depends on: %s)" % wns
 
+def sanity_check_input_sort(sort, wirename):
+    if (sort
+            and (sort not in (Free, Needed))
+            and (not isinstance(sort, (Free, Needed)))):
+        raise PyrtlError(
+            'Invalid sort ascription for input "%s" '
+            '(must provide either Free or Needed type name or instance).'
+            % wirename
+        )
+
+def sanity_check_output_sort(sort, wirename):
+    if (sort
+            and (sort not in (Giving, Dependent))
+            and (not isinstance(sort, (Giving, Dependent)))):
+        raise PyrtlError(
+            'Invalid sort ascription for output "%s" '
+            '(must provide either Giving or Dependent type name or instance).'
+            % wirename
+        )
 
 def check_module_interconnections(supermodule=None):
     """ Check if all modules in a supermodule (or the block if not given)

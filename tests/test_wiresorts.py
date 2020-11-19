@@ -232,7 +232,7 @@ class TestMultipleIntraModules(unittest.TestCase):
             '(b/6O[M] -> a/4I[M])'
         )
 
-    def test_loop_after_many_steps_immediate_check(self):
+    def test_loop_after_many_steps_immediate_check_after(self):
         """ Tests the scenario where you connect module input to
             something (say X), then connect module output to something
             else (say Y), and then later connect X to Y.
