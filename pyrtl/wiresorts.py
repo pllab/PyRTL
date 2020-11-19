@@ -306,8 +306,31 @@ def _build_intramodular_reachability_maps(module):
 def sort_matches(ascription, sort):
     # User can just supply classname (e.g. sort=Needed) without specifying _what_
     # the wire needs; that's fine, we just won't compare against the wires it needs.
+    #
+    # There is actually a subsort relation that has formed:
+    #
+    # A free input wire can be labelled as needed
+    # A giving output wire can be labelled as dependent
+    #
+    # Doing either is a way of forcing an attached output ('needed' input case) to be giving,
+    # but in these cases, there won't be any valid members of the needed-by-set.
+    # Right now, only allow them to do such a thing via supplying the classname, rather
+    # than an instance of the class (which will have internal sets to compare).
+
     if isinstance(ascription, type):
-        return isinstance(sort, ascription)
+        # F <: N
+        if ascription is Free:
+            return isinstance(sort, Free)
+        if ascription is Needed:
+            return isinstance(sort, (Free, Needed))
+        # G <: D
+        if ascription is Giving:
+            return isinstance(sort, Giving)
+        if ascription is Dependent:
+            return isinstance(sort, (Giving, Dependent))
+        # Replace the above with just this line if we don't want to allow
+        #   subtyped (i.e. conservative) ascriptions.
+        # return isinstance(sort, ascription)
 
     # Otherwise user supplied an instance of the InputSort/OutputSort class:
     assert ascription.ascription
