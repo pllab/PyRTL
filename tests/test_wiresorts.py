@@ -385,7 +385,6 @@ class TestAscriptions(unittest.TestCase):
             self.fail("The wire sort ascription objects (using names) are correct; "
                       "an error should not have been thrown.")
 
-    @unittest.skip
     def test_bad_sort_ascriptions(self):
         """ This fails if we allow subtyped, rather than exact, subscriptions """
         class L(pyrtl.Module):
@@ -593,6 +592,7 @@ class TestSubsorts(unittest.TestCase):
     def setUp(self):
         pyrtl.reset_working_block()
 
+    @unittest.skip
     def test_ascribe_input_as_supertype(self):
         # Can ascribe as something more strict than it actually is;
         # this allows you to essentially place restrictions on who
@@ -606,10 +606,11 @@ class TestSubsorts(unittest.TestCase):
                 o <<= r
 
         try:
-            m = M()
+            _m = M()
         except pyrtl.PyrtlError:
             self.fail("Should not have failed when ascribing a free input wire as needed.")
 
+    @unittest.skip
     def test_ascribe_output_as_supertype(self):
         class M(pyrtl.Module):
             def definition(self):
@@ -620,9 +621,37 @@ class TestSubsorts(unittest.TestCase):
                 o <<= r
 
         try:
-            m = M()
+            _m = M()
         except pyrtl.PyrtlError:
             self.fail("Should not have failed when ascribing a giving output wire as needed.")
+
+    @unittest.skip
+    def test_connecting_to_stricter_ascription(self):
+        class M(pyrtl.Module):
+            def definition(self):
+                i = self.Input(1, 'i', pyrtl.wiresorts.Needed)
+                r = pyrtl.Register(1, 'r')
+                r.next <<= i
+                o = self.Output(1, 'o')
+                o <<= r
+
+        class N(pyrtl.Module):
+            def definition(self):
+                i = self.Input(1, 'i')
+                o = self.Output(1, 'o', pyrtl.wiresorts.Dependent)
+                o <<= ~i
+
+        # Even though this connection is logically okay,
+        # the user ascribed M.i as Needed, so we should
+        # treat M.i as Needed despite it really being giving,
+        # and produce this error.
+        m = M()
+        n = N()
+        n.i <<= m.o
+        m.i <<= n.o
+
+        with self.assertRaises(pyrtl.PyrtlError):
+            pyrtl.Simulation()
 
 
 if __name__ == "__main__":
