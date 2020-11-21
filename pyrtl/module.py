@@ -202,7 +202,7 @@ class Module(object):
     def validity_check(self):
         # We _could_ check that there is at least one output and one input,
         # but this doesn't hold for things like a Constant generator (no inputs)
-        # or a CPU (not outputs).
+        # or a CPU (no outputs).
 
         # All _ModInput and _ModOutput names are unique (especially important since we use those
         # names as attributes for accessing them via the dot operator on the module).
